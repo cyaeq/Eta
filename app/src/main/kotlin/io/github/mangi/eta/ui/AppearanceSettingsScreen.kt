@@ -73,6 +73,13 @@ internal fun AppearanceSettingsScreen(onBack: () -> Unit) {
     var backgroundDimDraft by remember(appearance.backgroundDim) {
         mutableFloatStateOf(appearance.backgroundDim)
     }
+
+    fun update(transform: (AppearanceSettings) -> AppearanceSettings) {
+        coroutineScope.launch {
+            AppearanceSettingsRepository.update(transform)
+        }
+    }
+
     // 用 OpenDocument 而不是照片选择器：只有它支持把读权限持久化到重启之后。
     val backgroundImagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -85,12 +92,6 @@ internal fun AppearanceSettingsScreen(onBack: () -> Unit) {
                 )
             }
             update { current -> current.copy(backgroundImageUri = uri.toString()) }
-        }
-    }
-
-    fun update(transform: (AppearanceSettings) -> AppearanceSettings) {
-        coroutineScope.launch {
-            AppearanceSettingsRepository.update(transform)
         }
     }
 

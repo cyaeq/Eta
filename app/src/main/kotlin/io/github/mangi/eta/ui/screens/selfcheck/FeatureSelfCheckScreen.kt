@@ -346,10 +346,12 @@ private suspend fun runSelfCheck(context: Context): SelfCheckReport {
                     .firstOrNull { io.github.mangi.eta.data.repository.EtaFullBackup.isFullBackup(it.name) }
                     ?.let { file ->
                         val mb = String.format(java.util.Locale.US, "%.1f", file.length() / 1048576.0)
-                        val hasDb = java.util.zip.ZipFile(file).use { zip ->
-                            zip.getEntry("private/databases/eta.db") != null
+                        val dbState = io.github.mangi.eta.data.repository.EtaFullBackup.databaseEntryPresent(file)
+                        when (dbState) {
+                            true -> " · 最新全量包 $mb MB · 数据库已含"
+                            false -> " · 最新全量包 $mb MB · 数据库缺失"
+                            null -> " · 最新全量包 $mb MB"
                         }
-                        " · 最新全量包 $mb MB · 数据库${if (hasDb) "已含" else "缺失"}"
                     }
             }.getOrNull().orEmpty()
             "已开启 · $period · 保留 $keep 份 · 上次 $last$packInfo"
