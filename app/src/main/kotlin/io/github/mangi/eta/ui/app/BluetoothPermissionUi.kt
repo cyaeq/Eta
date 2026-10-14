@@ -18,10 +18,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import io.github.mangi.eta.R
+import io.github.mangi.eta.ui.components.EtaControlDefaults
 import io.github.mangi.eta.ui.components.MiuixDialogActions
 import io.github.mangi.eta.ui.model.PermissionHealthItemUi
 import io.github.mangi.eta.ui.model.PermissionStatusUi
-import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.window.WindowDialog
 
 internal fun bluetoothPermissionHealthItem(context: Context): PermissionHealthItemUi {
@@ -47,8 +47,8 @@ internal fun rememberBluetoothPermissionRequest(onResult: () -> Unit): () -> Uni
     }
     if (showSettingsGuide) {
         WindowDialog(
+            largeScreen = EtaControlDefaults.DialogCentered,
             show = true,
-            cornerRadius = DialogDefaults.CornerRadius,
             title = stringResource(R.string.permission_bluetooth_title),
             summary = stringResource(R.string.permission_bluetooth_denied),
             onDismissRequest = { showSettingsGuide = false },

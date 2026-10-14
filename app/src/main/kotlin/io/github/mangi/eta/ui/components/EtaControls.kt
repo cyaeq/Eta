@@ -20,12 +20,27 @@ import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 
+/**
+ * 全局控件的尺寸令牌。改外观时优先动这里，避免各处散改。
+ *
+ * 对话框圆角刻意**不在这里定义**：Miuix 会按屏幕实际圆角自适应
+ * （手机端取 `clamp(屏幕圆角 - 外侧边距, 32dp, 48dp)`，大屏居中弹窗才用固定值）。
+ * 之前 App 各处显式传 `cornerRadius = DialogDefaults.CornerRadius` 把这个自适应覆盖掉了，
+ * 于是手机底部弹出层的顶部圆角偏小、和屏幕底部圆角对不上，已统一移除。
+ */
 internal object EtaControlDefaults {
     val ButtonCornerRadius = 22.dp
     val ButtonMinHeight = 44.dp
     val ButtonPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
     val DialogInsideMargin = DpSize(24.dp, 24.dp)
     val DialogOutsideMargin = DpSize(16.dp, 16.dp)
+
+    /**
+     * 弹窗呈现方式，改这一个值就能全局切换：
+     * - true：居中卡片（Material 3 / RikkaHub 那种，缩放入场）
+     * - false：Miuix 默认的贴底弹出层（贴底滑入，圆角跟随屏幕）
+     */
+    val DialogCentered = true
 }
 
 @Composable
@@ -62,9 +77,9 @@ internal fun EtaWindowDialog(
     EtaPreferenceTheme {
         WindowDialog(
             show = show, title = title, summary = summary, modifier = modifier,
-            backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
+            largeScreen = EtaControlDefaults.DialogCentered,
+            backgroundColor = MiuixTheme.colorScheme.surfaceContainerHigh,
             onDismissRequest = onDismissRequest, onDismissFinished = onDismissFinished,
-            cornerRadius = DialogDefaults.CornerRadius,
             insideMargin = EtaControlDefaults.DialogInsideMargin,
             outsideMargin = EtaControlDefaults.DialogOutsideMargin,
             maxWidth = DialogDefaults.MaxWidth,
@@ -86,9 +101,9 @@ internal fun EtaOverlayDialog(
     EtaPreferenceTheme {
         OverlayDialog(
             show = show, title = title, summary = summary, modifier = modifier,
-            backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
+            largeScreen = EtaControlDefaults.DialogCentered,
+            backgroundColor = MiuixTheme.colorScheme.surfaceContainerHigh,
             onDismissRequest = onDismissRequest, onDismissFinished = onDismissFinished,
-            cornerRadius = DialogDefaults.CornerRadius,
             insideMargin = EtaControlDefaults.DialogInsideMargin,
             outsideMargin = EtaControlDefaults.DialogOutsideMargin,
             maxWidth = DialogDefaults.MaxWidth,

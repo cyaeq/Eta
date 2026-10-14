@@ -54,6 +54,7 @@ import io.github.mangi.eta.core.AndroidAgentLogger
 import io.github.mangi.eta.data.repository.RuntimeConfigRepository
 import io.github.mangi.eta.ui.AppearanceSettingsScreen
 import io.github.mangi.eta.ui.SettingsScreen
+import io.github.mangi.eta.ui.components.EtaControlDefaults
 import io.github.mangi.eta.ui.components.MiuixDialogActions
 import io.github.mangi.eta.ui.model.AgentHomeAction
 import io.github.mangi.eta.ui.model.AgentMemoryAction
@@ -102,7 +103,6 @@ import top.yukonga.miuix.kmp.nav.core.NavDisplayEffects
 import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 import top.yukonga.miuix.kmp.nav.core.rememberNavSystemCornerRadius
 import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
-import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
@@ -840,10 +840,10 @@ fun AgentAppRoot(
 
     characterStore.notice?.let { notice ->
         WindowDialog(
+            largeScreen = EtaControlDefaults.DialogCentered,
             show = true,
             title = "角色",
             summary = notice,
-            cornerRadius = DialogDefaults.CornerRadius,
             onDismissRequest = characterStore::dismissNotice,
         ) {
             top.yukonga.miuix.kmp.basic.TextButton(
@@ -854,8 +854,8 @@ fun AgentAppRoot(
 
     categoryMoveTarget?.let { conversation ->
         WindowDialog(
+            largeScreen = EtaControlDefaults.DialogCentered,
             show = true,
-            cornerRadius = DialogDefaults.CornerRadius,
             title = stringResource(R.string.conversation_category_move),
             onDismissRequest = { categoryMoveTarget = null },
         ) {
@@ -887,8 +887,8 @@ fun AgentAppRoot(
     conversationRenameTarget?.let { conversation ->
         var renameInput by remember(conversation.id) { mutableStateOf(conversation.title) }
         WindowDialog(
+            largeScreen = EtaControlDefaults.DialogCentered,
             show = true,
-            cornerRadius = DialogDefaults.CornerRadius,
             title = stringResource(R.string.conversation_rename_title),
             onDismissRequest = { conversationRenameTarget = null },
         ) {
@@ -916,8 +916,8 @@ fun AgentAppRoot(
 
     conversationDeleteTarget?.let { conversation ->
         WindowDialog(
+            largeScreen = EtaControlDefaults.DialogCentered,
             show = true,
-            cornerRadius = DialogDefaults.CornerRadius,
             title = stringResource(R.string.conversation_delete_title),
             summary = stringResource(R.string.conversation_delete_message),
             onDismissRequest = { conversationDeleteTarget = null },
@@ -936,8 +936,8 @@ fun AgentAppRoot(
 
     conversationBatchDeleteTarget?.let { conversations ->
         WindowDialog(
+            largeScreen = EtaControlDefaults.DialogCentered,
             show = true,
-            cornerRadius = DialogDefaults.CornerRadius,
             title = stringResource(R.string.conversation_delete_title),
             summary = pluralStringResource(
                 R.plurals.conversation_batch_delete_message,
@@ -962,8 +962,8 @@ fun AgentAppRoot(
 
     messageDeleteTarget?.let { target ->
         WindowDialog(
+            largeScreen = EtaControlDefaults.DialogCentered,
             show = true,
-            cornerRadius = DialogDefaults.CornerRadius,
             title = stringResource(R.string.conversation_delete_message_title),
             summary = if (target.laterTurnCount == 0) {
                 stringResource(R.string.conversation_delete_message_body)
@@ -990,8 +990,8 @@ fun AgentAppRoot(
 
     messageRegenerateTarget?.let { target ->
         WindowDialog(
+            largeScreen = EtaControlDefaults.DialogCentered,
             show = true,
-            cornerRadius = DialogDefaults.CornerRadius,
             title = stringResource(R.string.conversation_regenerate_title),
             summary = if (target.laterTurnCount == 0) {
                 stringResource(R.string.conversation_regenerate_current_turn)
