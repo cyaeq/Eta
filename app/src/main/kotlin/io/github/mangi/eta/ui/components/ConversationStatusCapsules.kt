@@ -64,7 +64,6 @@ internal fun ConversationStatusCapsules(
     ) {
         StatusCapsule(contextText, Modifier.weight(1f, fill = false), contextDescription)
         MemoryUsageCapsule()
-        LocalProfileTopBarCapsule(model)
         trimmed?.let { (rounds, count) ->
             StatusCapsule(
                 stringResource(R.string.conversation_trimmed_capsule, count), Modifier,
@@ -80,6 +79,12 @@ internal fun ConversationStatusCapsules(
         }
     }
 }
+
+/** 胶囊内文字与内边距：比 Miuix 默认小一圈，顶栏下面那行不至于抢戏。 */
+private val CapsuleFontSize = 10.sp
+private val CapsuleLineHeight = 13.sp
+private val CapsuleHorizontalPadding = 7.dp
+private val CapsuleVerticalPadding = 3.dp
 
 /** 输入栏左侧的上下文用量文字胶囊：`125.67K/200K · 62.8%`。 */
 @Composable
@@ -99,10 +104,12 @@ internal fun AgentContextUsageCapsule(
         text = text,
         modifier = modifier
             .background(etaTranslucent(MiuixTheme.colorScheme.surfaceContainer), CircleShape)
-            .padding(horizontal = 8.dp, vertical = 5.dp),
+            .padding(horizontal = CapsuleHorizontalPadding, vertical = CapsuleVerticalPadding),
         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
         style = MiuixTheme.textStyles.footnote1,
-        fontSize = 11.sp,
+        fontSize = CapsuleFontSize,
+        lineHeight = CapsuleLineHeight,
+        maxLines = 1,
     )
 }
 
@@ -110,9 +117,12 @@ internal fun AgentContextUsageCapsule(
 internal fun StatusCapsule(text: String, modifier: Modifier, description: String = text) {
     Text(text,
         modifier = modifier.background(etaTranslucent(MiuixTheme.colorScheme.surfaceContainer), CircleShape)
-            .semantics { contentDescription = description }.padding(horizontal = 8.dp, vertical = 5.dp),
+            .semantics { contentDescription = description }
+            .padding(horizontal = CapsuleHorizontalPadding, vertical = CapsuleVerticalPadding),
         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-        style = MiuixTheme.textStyles.footnote1, fontSize = 11.sp,
+        style = MiuixTheme.textStyles.footnote1,
+        fontSize = CapsuleFontSize,
+        lineHeight = CapsuleLineHeight,
         maxLines = 1, overflow = TextOverflow.Ellipsis,
     )
 }

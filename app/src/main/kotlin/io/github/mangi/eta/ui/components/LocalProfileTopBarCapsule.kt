@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.mangi.eta.R
 import io.github.mangi.eta.agent.model.LocalToolProfile
@@ -31,23 +32,35 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowListPopup
 
 /**
- * 顶栏「工具档」胶囊：点一下切换档位。下拉里第一项是纯聊天（不带工具），
- * 后面按用途分两组——能干活（正常／开发）、省 token（轻度／标准／极简）；
- * 组标题是矮一行的小字＋一句介绍，档位行自绘，行距比原生紧凑。
+ * 顶栏「工具档」入口：纯文字，不套胶囊底，点一下切换档位。
+ *
+ * 从底部状态胶囊组移上来，让 token／内存两枚胶囊独占下面一行。
+ * 下拉里第一项是纯聊天（不带工具），后面按用途分两组——能干活（正常／开发）、
+ * 省 token（轻度／标准／极简）；组标题是矮一行的小字＋一句介绍，档位行自绘，行距比原生紧凑。
  * 档位只决定发给模型的工具 schema 体量，不影响工具自身的执行能力。
  */
 @Composable
-internal fun LocalProfileTopBarCapsule(model: AgentModelOptionUi?) {
+internal fun LocalProfileTopBarAction(model: AgentModelOptionUi?) {
     val profileKey = model?.let { it.providerId to it.modelId }
     var profile by remember(profileKey) { mutableStateOf(LocalToolProfileStore.current(profileKey?.first, profileKey?.second)) }
     var showMenu by remember { mutableStateOf(false) }
     val name = stringResource(R.string.local_profile_capsule_name)
     Box {
-        StatusCapsule(
-            text = name + "·" + stringResource(profileLabel(profile)),
-            modifier = Modifier.clickable { showMenu = true },
-            description = stringResource(R.string.local_profile_capsule_description, name),
-        )
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .clickable { showMenu = true }
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = name + "·" + stringResource(profileLabel(profile)),
+                style = MiuixTheme.textStyles.title3,
+                color = MiuixTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         WindowListPopup(
             show = showMenu,
             alignment = PopupPositionProvider.Align.End,

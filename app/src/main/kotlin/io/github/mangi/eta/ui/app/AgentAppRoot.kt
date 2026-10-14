@@ -316,6 +316,11 @@ fun AgentAppRoot(
             onBack = { popRoute() },
             onOpenConversationPane = { conversationPaneOpen = true },
             onDismissConversationPane = { conversationPaneOpen = false },
+            profileAction = {
+                io.github.mangi.eta.ui.components.LocalProfileTopBarAction(
+                    agentState.modelPickerState.selectedModel,
+                )
+            },
             onSearchConversations = { query -> agentState.updateSearchQuery(query) },
             onNewConversation = { createConversation() },
             onOpenTerminal = { pushRoute(AppRoute.Terminal) },

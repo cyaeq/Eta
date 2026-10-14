@@ -100,12 +100,21 @@ fun AgentAppShell(
     onOpenTasks: () -> Unit,
     onOpenCategories: () -> Unit,
     conversationStatus: (@Composable () -> Unit)? = null,
+    /** 首页顶栏右侧的「工具档」入口；与 [conversationStatus] 同款可空槽位，由调用方注入。 */
+    profileAction: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberTopBarBackdrop()
     val topBarColor = topBarContainerColor(backdrop)
+    // 首页顶栏标题＝当前会话标题（标题为空时退回预览文本）；没选中会话时留空。
+    // 工具档从下面那行挪上来之后，导航图标与右侧操作之间的空位正好给标题用。
+    val homeTitle = conversationPaneState
+        ?.let { pane -> pane.conversations.firstOrNull { it.id == pane.selectedConversationId } }
+        ?.let { it.title.ifBlank { it.preview } }
+        ?.takeIf { it.isNotBlank() }
+        .orEmpty()
     val pageContent: @Composable () -> Unit = {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -119,6 +128,7 @@ fun AgentAppShell(
                     TopBarBackdrop(backdrop) {
                         AgentTopBar(
                             route = currentRoute,
+                            homeTitle = homeTitle,
                             scrollBehavior = scrollBehavior,
                             color = topBarColor,
                             onBack = onBack,
@@ -133,6 +143,7 @@ fun AgentAppShell(
                             onRefreshKimiWeb = onRefreshKimiWeb,
                             onOpenBrowser = onOpenBrowser,
                             conversationStatus = conversationStatus,
+                            profileAction = profileAction,
                         )
                     }
                 }
@@ -188,6 +199,7 @@ fun AgentAppShell(
 @Composable
 private fun AgentTopBar(
     route: AppRoute?,
+    homeTitle: String,
     scrollBehavior: ScrollBehavior,
     color: Color,
     onBack: () -> Unit,
@@ -202,6 +214,7 @@ private fun AgentTopBar(
     onRefreshKimiWeb: () -> Unit,
     onOpenBrowser: () -> Unit,
     conversationStatus: (@Composable () -> Unit)?,
+    profileAction: (@Composable () -> Unit)?,
 ) {
     val isHome = route is AppRoute.Home
     val navigationIcon: @Composable () -> Unit = {
@@ -219,10 +232,15 @@ private fun AgentTopBar(
     }
     val actions: @Composable RowScope.() -> Unit = {
         if (isHome) {
-            // 顶栏第一排只留新建对话与溢出菜单。
-            // 状态胶囊组不再挤在这一行：手机宽度装不下「导航图标 + 三枚胶囊 + 两个按钮」，
+            // 顶栏这一排：工具档入口、新建对话、溢出菜单。
+            // 状态胶囊组不再挤在这里：手机宽度装不下「导航图标 + 三枚胶囊 + 两个按钮」，
             // 胶囊组会向左溢出盖住导航图标（token 破 100K 后文字变长时尤其明显）。
-            IconButton(onClick = onNewConversation) {
+            profileAction?.invoke()
+            IconButton(
+                onClick = onNewConversation,
+                minWidth = TopBarActionButtonSize,
+                minHeight = TopBarActionButtonSize,
+            ) {
                 Icon(
                     imageVector = Icons.Rounded.AddComment,
                     contentDescription = stringResource(R.string.action_new_conversation),
@@ -248,16 +266,19 @@ private fun AgentTopBar(
     }
 
     if (isHome) {
-        // 首页聊天舞台保持紧凑；二级内容页统一使用可折叠大标题。
+        // 首页聊天舞台保持紧凑；标题处显示当前会话标题。二级内容页统一使用可折叠大标题。
         SmallTopAppBar(
-            title = titleForRoute(route),
+            title = homeTitle,
             color = color,
             scrollBehavior = scrollBehavior,
             navigationIcon = navigationIcon,
             actions = actions,
             bottomContent = statusRow,
+            // 首页标题靠左显示（不再是居中大标题），26dp 的默认内边距纯属浪费；
+            // 这台机器只有 363dp 宽，省下来的横向空间全部让给会话标题。
+            titlePadding = HomeTitlePadding,
             // miuix 的 actions 行本身是 Arrangement.End（靠右），右边原来有 16dp 默认留白，
-            // 收到 6dp：＋、⋯ 一起往右贴，行尾也不空。
+            // 收到 6dp：工具档、＋、⋯ 一起往右贴，行尾也不空。
             actionIconPadding = 6.dp,
         )
     } else {
@@ -272,6 +293,12 @@ private fun AgentTopBar(
 }
 
 private val TopBarMenuIconSize = 20.dp
+
+/** 首页顶栏两个操作按钮的触摸区。默认 48dp 在 363dp 宽的屏上太占位，收到 40dp 给标题让路。 */
+private val TopBarActionButtonSize = 40.dp
+
+/** 首页标题的横向内边距。Miuix 默认 26dp 是给居中大标题的，靠左显示后不需要。 */
+private val HomeTitlePadding = 8.dp
 
 /**
  * 首页顶栏溢出菜单。WindowListPopup 以父布局为锚点，因此与触发按钮包在同一个 Box 中，
@@ -291,7 +318,11 @@ private fun TopBarOverflowMenu(
 ) {
     var showMenu by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { onRefreshKimiWeb(); showMenu = true }) {
+        IconButton(
+            onClick = { onRefreshKimiWeb(); showMenu = true },
+            minWidth = TopBarActionButtonSize,
+            minHeight = TopBarActionButtonSize,
+        ) {
             Icon(
                 imageVector = Icons.Outlined.MoreHoriz,
                 modifier = Modifier.size(24.dp),
