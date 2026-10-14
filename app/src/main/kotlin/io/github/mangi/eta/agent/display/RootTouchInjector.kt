@@ -29,6 +29,53 @@ internal class RootTouchInjector {
 
     private fun usable() = inputManager != null && injectMethod != null && setDisplayId != null
 
+    /** 进行中手势的状态；down/move/up 分三条指令到达，所以要跨请求保留。 */
+    private val gestureLock = Any()
+    private var gestureDownTime = 0L
+    private var gestureDisplayId = INVALID_DISPLAY
+
+    /**
+     * 分段手势：按 down → move… → up 的指令序列注入，供虚拟屏查看页的触控直通使用。
+     *
+     * 三条指令是分开到达的，所以进行中的手势状态（按下时间与目标显示）必须跨请求保留；
+     * 目标显示与上次按下不一致时放弃注入，避免把半截手势丢到别的屏幕。
+     */
+    fun down(displayId: Int, x: Float, y: Float): Boolean {
+        if (!usable()) return false
+        val now = SystemClock.uptimeMillis()
+        if (!send(displayId, event(now, now, MotionEvent.ACTION_DOWN, x, y))) return false
+        synchronized(gestureLock) {
+            gestureDownTime = now
+            gestureDisplayId = displayId
+        }
+        return true
+    }
+
+    /** 没有进行中的手势（或目标显示对不上）时返回 false，由调用方决定是否回退。 */
+    fun move(displayId: Int, x: Float, y: Float): Boolean {
+        if (!usable()) return false
+        val downTime = synchronized(gestureLock) {
+            if (gestureDisplayId != displayId) return false
+            gestureDownTime
+        }
+        val now = SystemClock.uptimeMillis()
+        return send(displayId, event(downTime, now, MotionEvent.ACTION_MOVE, x, y))
+    }
+
+    /** cancel = true 发 CANCEL，用于手势被系统或查看页打断的场景。 */
+    fun up(displayId: Int, x: Float, y: Float, cancel: Boolean = false): Boolean {
+        if (!usable()) return false
+        val now = SystemClock.uptimeMillis()
+        val downTime = synchronized(gestureLock) {
+            val active = if (gestureDisplayId == displayId) gestureDownTime else now
+            gestureDownTime = 0L
+            gestureDisplayId = INVALID_DISPLAY
+            active
+        }
+        val action = if (cancel) MotionEvent.ACTION_CANCEL else MotionEvent.ACTION_UP
+        return send(displayId, event(downTime, now, action, x, y))
+    }
+
     /** true 表示手势已接管（DOWN 已注入，其余在后台线程）。 */
     fun startTap(displayId: Int, x: Float, y: Float): Boolean {
         if (!usable()) return false
@@ -90,5 +137,8 @@ internal class RootTouchInjector {
     private companion object {
         /** InputManager.INJECT_INPUT_EVENT_MODE_ASYNC */
         const val INJECT_ASYNC = 0
+
+        /** 没有任何进行中手势时的目标显示占位值。 */
+        const val INVALID_DISPLAY = Int.MIN_VALUE
     }
 }
