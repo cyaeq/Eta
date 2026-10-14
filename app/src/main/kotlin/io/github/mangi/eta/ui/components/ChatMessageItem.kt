@@ -50,6 +50,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,6 +81,7 @@ import io.github.mangi.eta.R
 import io.github.mangi.eta.agent.model.AgentFileReferencePromptCodec
 import io.github.mangi.eta.agent.overlay.toolDisplayName
 import io.github.mangi.eta.ui.markdown.MarkdownTone
+import io.github.mangi.eta.ui.voice.LocalSpeechPlaybackProgress
 import io.github.mangi.eta.ui.markdown.StaticMarkdown
 import io.github.mangi.eta.ui.markdown.StreamingMarkdown
 import io.github.mangi.eta.ui.markdown.StreamingMarkdownState
@@ -108,16 +110,26 @@ import top.yukonga.miuix.kmp.squircle.squircleSurface
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-internal fun rememberDataUrlBitmap(dataUrl: String) = remember(dataUrl) {
-    decodeDataUrlBitmap(dataUrl)
+internal fun rememberDataUrlBitmap(dataUrl: String, maxPx: Int? = null) = remember(dataUrl, maxPx) {
+    decodeDataUrlBitmap(dataUrl, maxPx)
 }
 
-internal fun decodeDataUrlBitmap(dataUrl: String): ImageBitmap? {
+internal fun decodeDataUrlBitmap(dataUrl: String, maxPx: Int? = null): ImageBitmap? {
     val base64 = dataUrl.substringAfter("base64,", "")
     if (base64.isBlank()) return null
     return runCatching {
         val bytes = Base64.decode(base64, Base64.NO_WRAP)
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+        if (maxPx == null) {
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+        } else {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            var sample = 1
+            val longest = maxOf(bounds.outWidth, bounds.outHeight)
+            while (longest > 0 && longest / (sample * 2) >= maxPx) sample *= 2
+            val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)?.asImageBitmap()
+        }
     }.getOrNull()
 }
 
@@ -293,6 +305,15 @@ private fun UserMessageBubble(
     LaunchedEffect(actionsEnabled) {
         if (!actionsEnabled) tooltipState.dismiss()
     }
+
+    // 自己发的消息也常驻一行操作：复制后给一句轻提示，避免"点了没反应"。
+    var copied by remember(message.id) { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(1600)
+            copied = false
+        }
+    }
     val visiblePrompt = remember(message.content) {
         AgentFileReferencePromptCodec.parse(message.content)
     }
@@ -302,14 +323,14 @@ private fun UserMessageBubble(
         Color(0xFFE5E7EA)
     }
 
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(
                 horizontal = if (assistantOverlay) 16.dp else 20.dp,
                 vertical = if (assistantOverlay) 4.dp else 7.dp,
             ),
-        horizontalArrangement = Arrangement.End,
+        horizontalAlignment = Alignment.End,
     ) {
         TooltipBox(
             positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
@@ -383,23 +404,32 @@ private fun UserMessageBubble(
                     ),
             ) {
                 if (message.images.isNotEmpty()) {
+                    var previewIndex by remember(message.images) { mutableStateOf<Int?>(null) }
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.padding(bottom = 8.dp)
                     ) {
-                        message.images.forEach { dataUrl ->
-                            val bitmap = rememberDataUrlBitmap(dataUrl)
+                        message.images.forEachIndexed { index, dataUrl ->
+                            val bitmap = rememberDataUrlBitmap(dataUrl, 256)
                             if (bitmap != null) {
                                 Image(
                                     bitmap = bitmap,
                                     contentDescription = null,
                                     modifier = Modifier
                                         .size(100.dp)
-                                        .clip(RoundedCornerShape(12.dp)),
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { previewIndex = index },
                                     contentScale = ContentScale.Crop,
                                 )
                             }
                         }
+                    }
+                    previewIndex?.let { start ->
+                        ImagePreviewOverlay(
+                            images = message.images,
+                            initialIndex = start,
+                            onDismiss = { previewIndex = null },
+                        )
                     }
                 }
                 if (visiblePrompt.references.isNotEmpty()) {
@@ -428,6 +458,64 @@ private fun UserMessageBubble(
                     )
                 }
             }
+        }
+        // 复制 / 编辑 / 删除：跟自己这行常驻按钮一致，长按菜单也保留不动。
+        UserMessageActionRow(
+            actionsEnabled = actionsEnabled,
+            copied = copied,
+            onCopy = {
+                @Suppress("DEPRECATION")
+                clipboardManager.setText(AnnotatedString(message.content))
+                copied = true
+            },
+            onEdit = onEdit,
+            onDelete = onDelete,
+        )
+    }
+}
+
+
+@Composable
+private fun UserMessageActionRow(
+    actionsEnabled: Boolean,
+    copied: Boolean,
+    onCopy: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.padding(top = 4.dp, end = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (copied) {
+            Text(
+                text = "已复制",
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = 4.dp),
+            )
+        }
+        IconButton(onClick = onCopy, enabled = actionsEnabled, minWidth = 30.dp, minHeight = 30.dp) {
+            Icon(
+                imageVector = Icons.Rounded.ContentCopy,
+                contentDescription = stringResource(R.string.ui_copy_4edd1d),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        IconButton(onClick = onEdit, enabled = actionsEnabled, minWidth = 30.dp, minHeight = 30.dp) {
+            Icon(
+                imageVector = Icons.Rounded.Edit,
+                contentDescription = stringResource(R.string.ui_edit_a7f814),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        IconButton(onClick = onDelete, enabled = actionsEnabled, minWidth = 30.dp, minHeight = 30.dp) {
+            Icon(
+                imageVector = Icons.Rounded.Delete,
+                contentDescription = stringResource(R.string.ui_delete_3755f5),
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }
@@ -533,7 +621,11 @@ private fun AgentMessageBlock(
 ) {
     @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
+    // 只有正在朗读的这条消息才进入高亮分支，其余消息不产生额外重组。
+    val speechProgress = LocalSpeechPlaybackProgress.current.value
+    val speechHighlight = speechProgress.highlight.takeIf { speechProgress.messageId == message.id }
     var copied by remember(message.id) { mutableStateOf(false) }
+    var showSelectionCopy by remember(message.id) { mutableStateOf(false) }
     val keepStreamingMarkdown = remember(message.id) { message.isStreaming }
     var streamingRevealComplete by remember(message.id) {
         mutableStateOf(!keepStreamingMarkdown)
@@ -589,6 +681,7 @@ private fun AgentMessageBlock(
                         content = message.content,
                         tone = MarkdownTone.Answer,
                         parsed = completedDocument,
+                        highlight = speechHighlight,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -602,6 +695,13 @@ private fun AgentMessageBlock(
                     )
                 }
             }
+        }
+
+        if (showSelectionCopy) {
+            SelectionCopyDialog(
+                text = message.content,
+                onDismiss = { showSelectionCopy = false },
+            )
         }
 
         if (
@@ -639,6 +739,18 @@ private fun AgentMessageBlock(
                         } else {
                             MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.75f)
                         },
+                    )
+                }
+                IconButton(
+                    onClick = { showSelectionCopy = true },
+                    minWidth = 30.dp,
+                    minHeight = 30.dp,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.TextFields,
+                        contentDescription = stringResource(R.string.selection_copy_entry),
+                        modifier = Modifier.size(15.dp),
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.75f),
                     )
                 }
                 if (allowSpeech) SpeechReadAloudButton(message.id, message.content)

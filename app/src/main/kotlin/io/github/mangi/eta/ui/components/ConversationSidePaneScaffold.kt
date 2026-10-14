@@ -76,8 +76,11 @@ fun ConversationSidePaneScaffold(
     onNewConversation: () -> Unit,
     onConversationSelected: (String) -> Unit,
     onConversationRename: (ConversationSummaryUi) -> Unit,
+    onMoveToCategory: (ConversationSummaryUi) -> Unit,
     onConversationExport: (ConversationSummaryUi) -> Unit,
     onConversationDelete: (ConversationSummaryUi) -> Unit,
+    onConversationPin: (ConversationSummaryUi) -> Unit,
+    onBatchDelete: (List<ConversationSummaryUi>) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenRootSettings: () -> Unit,
     onOpenAccessibilitySettings: () -> Unit,
@@ -87,6 +90,7 @@ fun ConversationSidePaneScaffold(
     onOpenCharacters: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenTasks: () -> Unit,
+    onOpenCategories: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
@@ -232,8 +236,11 @@ fun ConversationSidePaneScaffold(
                         onNewConversation = onNewConversation,
                         onConversationSelected = onConversationSelected,
                         onConversationRename = onConversationRename,
+                        onMoveToCategory = onMoveToCategory,
                         onConversationExport = onConversationExport,
                         onConversationDelete = onConversationDelete,
+                        onConversationPin = onConversationPin,
+                        onBatchDelete = onBatchDelete,
                         onOpenSettings = onOpenSettings,
                         onOpenRootSettings = onOpenRootSettings,
                         onOpenAccessibilitySettings = onOpenAccessibilitySettings,
@@ -243,6 +250,7 @@ fun ConversationSidePaneScaffold(
                         onOpenCharacters = onOpenCharacters,
                         onOpenPermissions = onOpenPermissions,
                         onOpenTasks = onOpenTasks,
+                        onOpenCategories = onOpenCategories,
                         modifier = Modifier
                             .focusProperties { onEnter = { if (!isRevealed) cancelFocusChange() } }
                             .focusGroup()

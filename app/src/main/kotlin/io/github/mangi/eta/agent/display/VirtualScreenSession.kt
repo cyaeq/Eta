@@ -47,8 +47,8 @@ internal object VirtualScreenSession {
         val process: java.lang.Process,
         val input: BufferedWriter,
         val output: BufferedReader,
-        val width: Int,
-        val height: Int,
+        var width: Int,
+        var height: Int,
         val allowOff: Boolean,
         runId: String?,
     ) {
@@ -113,8 +113,12 @@ internal object VirtualScreenSession {
     fun updateIdleTimeout() = synchronized(lock) {
         val current = session.get() ?: return@synchronized
         val minutes = runBlocking { SettingsDataStore.settings() }.virtualScreenIdleTimeoutMinutes
+        val fps = io.github.mangi.eta.data.model.VirtualScreenFrameRate.normalize(
+            runBlocking { SettingsDataStore.settings() }.virtualScreenFrameRate)
         execute(current.context, current.owner, JSONObject().put("action", "lifecycle")
-            .put("idleTimeoutMinutes", minutes).put("activeRun", viewerState.value.activeRunId != null))
+            .put("idleTimeoutMinutes", minutes).put("activeRun", viewerState.value.activeRunId != null)
+            .put("frameIntervalMs", io.github.mangi.eta.data.model.VirtualScreenFrameRate.intervalMs(fps))
+            .put("jpegQuality", io.github.mangi.eta.data.model.VirtualScreenFrameRate.jpegQuality(fps)))
         Unit
     }
 
@@ -139,6 +143,11 @@ internal object VirtualScreenSession {
             require(android.os.Build.VERSION.SDK_INT >= 34) { "DEVICE_UNSUPPORTED" }
             val settings = runBlocking { SettingsDataStore.settings() }
             require(settings.virtualScreenEnabled) { "VIRTUAL_SCREEN_DISABLED" }
+            if (!RootAccess.isGranted) {
+                VscrDiag.line("RootAccess 未授权，主动申请一次")
+                runBlocking { runCatching { RootAccess.request(context).join() } }
+                VscrDiag.line("RootAccess 申请结果 granted=" + RootAccess.isGranted)
+            }
             require(RootAccess.isGranted) { "ROOT_REQUIRED" }
             val action = args.getString("action")
             if (action == "launch" && args.optBoolean("restartApp")) {
@@ -153,6 +162,13 @@ internal object VirtualScreenSession {
                 val width = bounded(args, "width", 320, VirtualScreenProfile.MAX_WIDTH, profile.width)
                 val height = bounded(args, "height", 480, VirtualScreenProfile.MAX_HEIGHT, profile.height)
                 val density = bounded(args, "density", 120, VirtualScreenProfile.MAX_DENSITY, profile.density)
+                io.github.mangi.eta.core.EtaTrace.log(
+                    "vscr",
+                    "helper 启动 runId=$runId owner=$owner ${width}x$height" +
+                        " density=$density allowOff=$allowOff",
+                )
+                HelperExitLog.started()
+                VscrDiag.line("helper 启动 " + width + "x" + height + " d=" + density + " owner=" + owner)
                 val apk = context.applicationInfo.sourceDir
                 fun quote(value: String) = "'" + value.replace("'", "'\\''") + "'"
                 val process = ProcessBuilder(
@@ -160,12 +176,17 @@ internal object VirtualScreenSession {
                     "-c",
                     "CLASSPATH=${quote(apk)} app_process /system/bin io.github.mangi.eta.agent.display.RootDisplayCommandMain"
                 ).start()
+                VscrDiag.line("helper 进程已创建")
                 Thread {
                     runCatching {
-                        process.errorStream.use { stream ->
-                            val buffer =
-                                ByteArray(4096); while (stream.read(buffer) >= 0) { /* 持续排空，不记录画面或私有数据。 */
-                        }
+                        // 持续排空，同时把诊断文本留给 HelperExitLog；它只收短行，
+                        // 超长行与疑似 base64 数据一律丢弃，不会带出画面或私有数据。
+                        process.errorStream.bufferedReader().use { reader ->
+                            while (true) {
+                                val line = reader.readLine() ?: break
+                                HelperExitLog.stderr(line)
+                                VscrDiag.line("helper stderr: " + line)
+                            }
                         }
                     }
                 }.apply { isDaemon = true; start() }
@@ -174,7 +195,11 @@ internal object VirtualScreenSession {
                 val current = Session(context.applicationContext, owner, process, input, output, width, height, allowOff, runId)
                 check(session.compareAndSet(null, current))
                 Thread {
-                    runCatching { process.waitFor() }
+                    val exitCode = runCatching { process.waitFor() }.getOrDefault(-1)
+                    // 退出码是判断 native 崩溃还是被系统回收的唯一线索，必须留下。
+                    io.github.mangi.eta.core.EtaTrace.log("vscr", "helper 退出 exitCode=$exitCode")
+                    HelperExitLog.finished(exitCode)
+                    VscrDiag.line("helper 退出 exitCode=" + exitCode)
                     current.close()
                 }.apply { name = "eta-display-exit"; isDaemon = true; start() }
                 if (!AgentExecutionService.acquire(context, "virtual-screen-${current.id}", onStop = current::close)) {
@@ -190,21 +215,31 @@ internal object VirtualScreenSession {
                         JSONObject().put("action", "create").put("width", width)
                             .put("height", height).put("density", density)
                             .put("sessionId", current.id)
+                            .put("selfPackage", context.packageName)
+                            .put("surfaceToken", VirtualScreenHostSurfaces.token)
                             .put("idleTimeoutMinutes", settings.virtualScreenIdleTimeoutMinutes)
+                            .put("refreshRate", settings.virtualScreenFrameRate)
+                            .put("frameIntervalMs", io.github.mangi.eta.data.model.VirtualScreenFrameRate.intervalMs(settings.virtualScreenFrameRate))
+                            .put("jpegQuality", io.github.mangi.eta.data.model.VirtualScreenFrameRate.jpegQuality(settings.virtualScreenFrameRate))
                             .put("activeRun", runId != null)
                             .put("allowScreenOff", allowOff).toString()
                     ); input.newLine(); input.flush()
+                    VscrDiag.line("create 已发送，等待 helper 响应")
                     readResponse(output)
                 } catch (error: Exception) {
+                    VscrDiag.line("create 等待失败: " + error.message)
                     current.close(); throw error
                 } finally {
                     deadline.cancel(false)
                 }
+                VscrDiag.line("helper 响应: " + response.toString().take(300))
                 if (!response.optBoolean("ok") || response.optInt("displayId") <= 0 || current.closed.get()) {
                     current.close()
                     error(response.optString("code", "ROOT_DISPLAY_UNAVAILABLE"))
                 }
                 current.displayId = response.getInt("displayId")
+                // helper 用宿主面建屏成功才允许界面切直通；否则保持整帧管线。
+                VirtualScreenHostSurfaces.live = response.optBoolean("direct")
                 viewerState.value = VirtualScreenViewerState(
                     display = VirtualDisplayInfo(current.id, owner, current.displayId, width, height, density = density),
                     lastAction = "create",
@@ -231,12 +266,27 @@ internal object VirtualScreenSession {
             } finally {
                 timeout.cancel(false)
             }
-            if (result.optBoolean("ok") && action in setOf("probe", "launch", "switch_task")) {
-                viewerState.update { state -> state.copy(display = state.display?.let { info ->
-                    if (info.sessionId != current.id) info else info.copy(
-                        focusedPackage = if (action == "probe") result.optString("packageName") else "",
-                    )
-                }) }
+            if (result.optBoolean("ok")) {
+                // 横屏应用会让 Root 进程把 display 换成横屏尺寸，这里同步尺寸供小窗、坐标系与截图共用。
+                val nextWidth = result.optInt("width", 0)
+                val nextHeight = result.optInt("height", 0)
+                if (nextWidth > 0 && nextHeight > 0) {
+                    current.width = nextWidth
+                    current.height = nextHeight
+                }
+                if (action in setOf("observe", "probe", "launch", "switch_task")) {
+                    viewerState.update { state -> state.copy(display = state.display?.let { info ->
+                        if (info.sessionId != current.id) info else info.copy(
+                            width = current.width,
+                            height = current.height,
+                            focusedPackage = when (action) {
+                                "probe" -> result.optString("packageName")
+                                "launch", "switch_task" -> ""
+                                else -> info.focusedPackage
+                            },
+                        )
+                    }) }
+                }
             }
             if (action !in setOf("observe", "probe")) {
                 viewerState.update { it.copy(lastAction = action) }
@@ -250,7 +300,7 @@ internal object VirtualScreenSession {
                 AgentModelClient.ModelImage(
                     "data:image/jpeg;base64,$encoded",
                     "image/jpeg",
-                    Base64.decode(encoded, Base64.DEFAULT).size,
+                    encoded.length * 3 / 4,
                     current.width,
                     current.height,
                     "virtual_display",
@@ -259,6 +309,7 @@ internal object VirtualScreenSession {
             ) else emptyList()
             AgentModelClient.ToolResult(result.toString(), images, sensitive = true)
         } catch (error: Exception) {
+            VscrDiag.line("execute 失败 action=" + args.optString("action") + " 原因=" + error.message)
             session.get()?.let { current ->
                 if (current.closed.get() || !current.process.isAlive ||
                     current.owner == owner && error.message in setOf("ROOT_REQUIRED", "VIRTUAL_SCREEN_DISABLED", "SCREEN_OFF_PERMISSION_REQUIRED")) {
@@ -280,6 +331,21 @@ internal object VirtualScreenSession {
         }
     }
 
+    /** A′ 直通：宿主面变了（查看页/小窗重建、互切），让 helper 立刻重新取面。 */
+    fun notifyHostSurface(context: Context) = synchronized(lock) {
+        val current = session.get() ?: return@synchronized
+        if (current.closed.get()) return@synchronized
+        val result = execute(context, current.owner, JSONObject().put("action", "host_surface"))
+        if (JSONObject(result.content).optBoolean("direct")) VirtualScreenHostSurfaces.live = true
+    }
+
+    /** 只探尺寸与前台包，不拉整帧：直通模式下小窗靠它跟上虚拟屏的横竖屏切换。 */
+    fun refreshForViewer(context: Context): AgentModelClient.ToolResult = synchronized(lock) {
+        val current = session.get()
+            ?: return@synchronized AgentModelClient.ToolResult("{\"ok\":false,\"code\":\"NO_VIRTUAL_SCREEN\"}")
+        execute(context, current.owner, JSONObject().put("action", "probe"))
+    }
+
     fun observeForViewer(context: Context, afterFrameId: Long = 0): AgentModelClient.ToolResult = synchronized(lock) {
         val current = session.get()
             ?: return@synchronized AgentModelClient.ToolResult("{\"ok\":false,\"code\":\"NO_VIRTUAL_SCREEN\"}")
@@ -288,21 +354,42 @@ internal object VirtualScreenSession {
 
     fun inputForViewer(context: Context, sessionId: String, args: JSONObject): AgentModelClient.ToolResult = synchronized(lock) {
         val current = session.get()
-        if (current == null || current.id != sessionId || args.optString("action") !in setOf("tap", "swipe", "long_press", "back", "key", "switch_task", "text")) {
+        if (current == null || current.id != sessionId || args.optString("action") !in setOf("tap", "swipe", "long_press", "back", "key", "switch_task", "text", "touch", "ime")) {
             return@synchronized failure("STALE_VIRTUAL_SCREEN")
         }
-        viewerState.update { state -> state.copy(display = state.display?.let {
-            it.copy(manualInputGeneration = it.manualInputGeneration + 1)
-        }) }
+        // 直通拖动每秒上百个事件：只有按下和抬起值得记一条历史。
+        val liveMove = args.optString("action") == "touch" && args.optString("phase") in setOf("down", "move")
+        if (!liveMove) {
+            viewerState.update { state -> state.copy(display = state.display?.let {
+                it.copy(manualInputGeneration = it.manualInputGeneration + 1)
+            }) }
+        }
         execute(context, current.owner, args).also { result ->
-            val name = if (args.optString("action") == "key") args.optString("button").lowercase() else args.optString("action")
-            recordOperation(current.owner, null, name, JSONObject(result.content).optBoolean("ok"), manual = true)
+            if (!liveMove) {
+                val name = if (args.optString("action") == "key") args.optString("button").lowercase() else args.optString("action")
+                recordOperation(current.owner, null, name, JSONObject(result.content).optBoolean("ok"), manual = true)
+            }
         }
     }
 
     fun tasksForViewer(context: Context, sessionId: String): AgentModelClient.ToolResult = synchronized(lock) {
         val current = session.get()?.takeIf { it.id == sessionId } ?: return@synchronized failure("STALE_VIRTUAL_SCREEN")
         execute(context, current.owner, JSONObject().put("action", "tasks"))
+    }
+
+    /** 手动在小窗里点开某个应用：只在 display 内启动，绝不把主屏任务迁进来。 */
+    fun launchForViewer(context: Context, sessionId: String, component: String): AgentModelClient.ToolResult = synchronized(lock) {
+        val current = session.get()?.takeIf { it.id == sessionId } ?: return@synchronized failure("STALE_VIRTUAL_SCREEN")
+        execute(context, current.owner, JSONObject().put("action", "launch").put("component", component)).also { result ->
+            recordOperation(current.owner, null, "launch", JSONObject(result.content).optBoolean("ok"), manual = true)
+        }
+    }
+
+    /** 在 display 内打开 Eta 自带导航页；mode 用 HOME / MENU / APPS。 */
+    fun homeForViewer(context: Context, sessionId: String, mode: String): AgentModelClient.ToolResult = synchronized(lock) {
+        val current = session.get()?.takeIf { it.id == sessionId } ?: return@synchronized failure("STALE_VIRTUAL_SCREEN")
+        val action = mode.takeIf { it in setOf("HOME", "MENU", "APPS") } ?: return@synchronized failure("VIRTUAL_ACTION_UNSUPPORTED")
+        execute(context, current.owner, JSONObject().put("action", "key").put("button", action))
     }
 
     /** Probe the Root process while holding the same lock as manual input and other tools. */

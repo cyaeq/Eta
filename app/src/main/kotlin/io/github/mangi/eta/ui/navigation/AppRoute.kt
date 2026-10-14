@@ -66,6 +66,21 @@ sealed interface AppRoute : NavKey {
     data object Memory : AppRoute
     @Serializable
     data object Tasks : AppRoute
+
+    @Serializable
+    data object TokenUsage : AppRoute
+
+    @Serializable
+    data object DataUsage : AppRoute
+
+    @Serializable
+    data object SelfCheck : AppRoute
+
+    @Serializable
+    data object DiagnosticsPatrol : AppRoute
+
+    @Serializable
+    data object ConversationCategories : AppRoute
     @Serializable
     data object VirtualScreen : AppRoute
 

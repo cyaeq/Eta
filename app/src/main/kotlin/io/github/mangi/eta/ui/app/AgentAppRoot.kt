@@ -82,6 +82,8 @@ import io.github.mangi.eta.ui.screens.mcp.McpServerDetailScreen
 import io.github.mangi.eta.ui.screens.mcp.McpServersScreen
 import io.github.mangi.eta.ui.screens.memory.AgentMemoryScreen
 import io.github.mangi.eta.ui.screens.tasks.AgentTasksScreen
+import io.github.mangi.eta.ui.screens.usage.DataUsageScreen
+import io.github.mangi.eta.ui.screens.usage.TokenUsageScreen
 import io.github.mangi.eta.ui.screens.permissions.PermissionHealthScreen
 import io.github.mangi.eta.ui.screens.skills.AgentSkillsScreen
 import io.github.mangi.eta.ui.screens.terminal.LinuxEnvironmentScreen
@@ -117,22 +119,49 @@ fun AgentAppRoot(
     onAssistantConversationOpened: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
+    // 用户回到 Eta：清掉悬浮胶囊上的「已完成」未读提示。
+    LaunchedEffect(Unit) {
+        runCatching {
+            context.startService(
+                android.content.Intent(
+                    context,
+                    io.github.mangi.eta.agent.runtime.AgentRuntimeService::class.java,
+                ).setAction(io.github.mangi.eta.agent.runtime.AgentRuntimeService.ACTION_CLEAR_READ),
+            )
+        }
+    }
     val resources = LocalResources.current
     val uiScope = rememberCoroutineScope()
     val backStack = rememberNavBackStack<AppRoute>(AppRoute.Home)
+    val navigator = remember(backStack) { AgentNavigator(backStack) }
+    // 返回栈里出现两个同 key 的条目会让 NavDisplay 直接抛 IllegalArgumentException
+    // （Duplicate contentKey on the back stack）并崩在主线程；这里对所有来源兜底去重。
+    LaunchedEffect(backStack.size) {
+        val seen = mutableSetOf<Any>()
+        var index = 0
+        while (index < backStack.size) {
+            if (!seen.add(backStack[index])) backStack.removeAt(index) else index++
+        }
+    }
     LaunchedEffect(openSpeechSettings) {
         if (openSpeechSettings) {
-            if (backStack.lastOrNull() != AppRoute.SpeechSettings) backStack.add(AppRoute.SpeechSettings)
+            navigator.push(AppRoute.SpeechSettings)
             onSpeechSettingsOpened()
         }
     }
-    val navigator = remember(backStack) { AgentNavigator(backStack) }
     var navigationResetKey by rememberSaveable { mutableIntStateOf(0) }
     val appViewModel = viewModel<AgentAppViewModel>()
     val agentState = appViewModel.state
     val skills = appViewModel.skills
     val memory = appViewModel.memory
     val permissionHealth = appViewModel.permissionHealth
+    // 分享进来的内容：界面就绪后回到首页，填进当前会话输入框并附图。
+    LaunchedEffect(ShareIntake.version) {
+        val payload = ShareIntake.consume() ?: return@LaunchedEffect
+        navigator.push(AppRoute.Home)
+        payload.text?.let { text -> agentState.applySharedText(text) }
+        payload.images.forEach { uri -> agentState.attachImage(uri) }
+    }
     val toolsState = remember { buildToolsState(context) }
     val characterStore = viewModel<CharacterLibraryViewModel>().store
     val communityCatalogStore = viewModel<CommunityCatalogViewModel>().store
@@ -160,7 +189,9 @@ fun AgentAppRoot(
 
     var conversationPaneOpen by remember { mutableStateOf(false) }
     var conversationRenameTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
+    var categoryMoveTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
     var conversationDeleteTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
+    var conversationBatchDeleteTarget by remember { mutableStateOf<List<ConversationSummaryUi>?>(null) }
     var conversationExportTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
     var messageDeleteTarget by remember { mutableStateOf<MessageMutationTarget?>(null) }
     var messageRegenerateTarget by remember { mutableStateOf<MessageMutationTarget?>(null) }
@@ -272,7 +303,14 @@ fun AgentAppRoot(
             conversationStatus = {
                 io.github.mangi.eta.ui.components.ConversationStatusCapsules(
                     agentState.homeState.messages, agentState.modelPickerState.selectedModel,
-                    agentState.homeState.lastModelUsage,
+                    agentState.homeState.lastModelUsage, agentState.historyTrimNotice,
+                    agentState.overflowDowngradeNotice,
+                    compaction = agentState.homeState.history
+                        .let { io.github.mangi.eta.agent.model.AgentContextPolicy.rounds(it) }
+                        .takeIf { it > 0 }
+                        ?.let {
+                            it to io.github.mangi.eta.agent.model.AgentContextPolicy.MAX_COMPACTION_ROUNDS
+                        },
                 )
             },
             onBack = { popRoute() },
@@ -318,6 +356,18 @@ fun AgentAppRoot(
             onConversationDelete = { conversation ->
                 conversationDeleteTarget = conversation
             },
+            onConversationPin = { conversation ->
+                if (!agentState.setConversationPinned(conversation.id, !conversation.isPinned)) {
+                    Toast.makeText(
+                        context,
+                        resources.getString(R.string.conversation_pin_limit),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            },
+            onBatchDelete = { conversations ->
+                conversationBatchDeleteTarget = conversations
+            },
             onOpenTools = { pushRoute(AppRoute.Tools) },
             onOpenSkills = { pushRoute(AppRoute.Skills) },
             onOpenCharacters = { pushRoute(AppRoute.Characters) },
@@ -327,6 +377,8 @@ fun AgentAppRoot(
             onOpenAccessibilitySettings = ::openAccessibilitySettings,
             onOpenModelProviders = { pushRoute(AppRoute.ModelProviders) },
             onOpenTasks = { pushRoute(AppRoute.Tasks) },
+            onOpenCategories = { pushRoute(AppRoute.ConversationCategories) },
+            onMoveToCategory = { conversation -> categoryMoveTarget = conversation },
         ) { padding ->
             Box(
                 modifier = Modifier
@@ -357,6 +409,7 @@ fun AgentAppRoot(
             entry<AppRoute.Home>(swipeDismiss = swipeDismiss) {
                 RoutedShell(route = AppRoute.Home) {
                     AgentHomeScreen(
+                        isPaused = agentState.runPaused,
                         state = agentState.homeState,
                         modelPickerState = agentState.modelPickerState,
                         conversationKey = agentState.conversationPaneState.selectedConversationId,
@@ -368,6 +421,8 @@ fun AgentAppRoot(
                                 is AgentHomeAction.ModelSelected -> agentState.selectModel(action.modelId)
                                 is AgentHomeAction.SubmitMessage -> { requestExecutionNotifications(); agentState.sendCurrentMessage(action.text) }
                                 AgentHomeAction.StopRun -> agentState.stopCurrentRun()
+                                AgentHomeAction.PauseRun -> agentState.pauseCurrentRun()
+                                AgentHomeAction.ResumeRun -> agentState.resumeCurrentRun()
                                 is AgentHomeAction.ImageAttached -> agentState.attachImage(action.uri)
                                 is AgentHomeAction.RemoveImage -> agentState.removePendingImage(action.id)
                                 is AgentHomeAction.FilesAttached -> agentState.attachFiles(action.uris)
@@ -377,6 +432,9 @@ fun AgentAppRoot(
                                     agentState.removePendingFileReference(action.id)
                                 is AgentHomeAction.EditMessage -> agentState.beginMessageEdit(action.id)
                                 AgentHomeAction.CancelMessageEdit -> agentState.cancelMessageEdit()
+                                AgentHomeAction.SearchJumpConsumed -> agentState.consumeSearchJump()
+                                AgentHomeAction.ResumeInterruptedRun -> agentState.resumeInterruptedRun()
+                                AgentHomeAction.DismissInterruptedRun -> agentState.dismissInterruptedRun()
                                 is AgentHomeAction.DeleteMessage -> {
                                     agentState.messageRevisionImpact(action.id)?.let { impact ->
                                         messageDeleteTarget = MessageMutationTarget(action.id, impact.laterTurnCount)
@@ -625,8 +683,39 @@ fun AgentAppRoot(
                     onBack = ::popRoute
                 )
             }
+            entry<AppRoute.ConversationCategories>(swipeDismiss = swipeDismiss) {
+                io.github.mangi.eta.ui.screens.conversations.ConversationCategoriesScreen(
+                    categories = agentState.conversationCategories,
+                    conversationCategoryIds = agentState.conversationCategoryIds,
+                    conversations = agentState.conversationPaneState.conversations,
+                    onBack = ::popRoute,
+                    onCreate = { name -> agentState.createConversationCategory(name) },
+                    onRename = { id, name -> agentState.renameConversationCategory(id, name) },
+                    onDelete = { id -> agentState.deleteConversationCategory(id) },
+                    onMove = { id, delta -> agentState.moveConversationCategory(id, delta) },
+                    onOpenConversation = { id ->
+                        agentState.selectConversation(id)
+                        popRoute()
+                    },
+                )
+            }
+
             entry<AppRoute.Tasks>(swipeDismiss = swipeDismiss) {
                 AgentTasksScreen(onBack = { popRoute() })
+            }
+
+            entry<AppRoute.TokenUsage>(swipeDismiss = swipeDismiss) {
+                TokenUsageScreen(onBack = { popRoute() })
+            }
+
+            entry<AppRoute.DataUsage>(swipeDismiss = swipeDismiss) {
+                DataUsageScreen(onBack = { popRoute() })
+            }
+            entry<AppRoute.SelfCheck>(swipeDismiss = swipeDismiss) {
+                io.github.mangi.eta.ui.screens.selfcheck.FeatureSelfCheckScreen(onBack = { popRoute() })
+            }
+            entry<AppRoute.DiagnosticsPatrol>(swipeDismiss = swipeDismiss) {
+                io.github.mangi.eta.ui.screens.selfcheck.DiagnosticsPatrolScreen(onBack = { popRoute() })
             }
             entry<AppRoute.VirtualScreen>(swipeDismiss = swipeDismiss) {
                 io.github.mangi.eta.ui.screens.tasks.VirtualScreenSettingsScreen(onBack = { popRoute() })
@@ -672,6 +761,7 @@ fun AgentAppRoot(
                             is AgentMemoryAction.ToggleEnabled -> memory.setMemoryEnabled(action.enabled)
                             is AgentMemoryAction.ToggleAutoMemory -> memory.setAutomaticReview(memory = action.enabled)
                             is AgentMemoryAction.ToggleAutoSkills -> memory.setAutomaticReview(skills = action.enabled)
+                            is AgentMemoryAction.ToggleAutoCompact -> memory.setMemoryAutoCompact(action.enabled)
                             is AgentMemoryAction.DraftChanged -> memory.updateMemoryDraft(action.content)
                             AgentMemoryAction.Save -> memory.saveMemory()
                             AgentMemoryAction.Clear -> memory.clearMemory()
@@ -762,6 +852,38 @@ fun AgentAppRoot(
         }
     }
 
+    categoryMoveTarget?.let { conversation ->
+        WindowDialog(
+            show = true,
+            cornerRadius = DialogDefaults.CornerRadius,
+            title = stringResource(R.string.conversation_category_move),
+            onDismissRequest = { categoryMoveTarget = null },
+        ) {
+            Column {
+                agentState.conversationCategories
+                    .sortedWith(compareBy({ it.sortOrder }, { it.createdAt }))
+                    .forEach { category ->
+                        top.yukonga.miuix.kmp.basic.TextButton(
+                            text = category.name,
+                            onClick = {
+                                agentState.setConversationCategory(conversation.id, category.id)
+                                categoryMoveTarget = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                top.yukonga.miuix.kmp.basic.TextButton(
+                    text = stringResource(R.string.conversation_category_uncategorized),
+                    onClick = {
+                        agentState.setConversationCategory(conversation.id, null)
+                        categoryMoveTarget = null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+
     conversationRenameTarget?.let { conversation ->
         var renameInput by remember(conversation.id) { mutableStateOf(conversation.title) }
         WindowDialog(
@@ -807,6 +929,32 @@ fun AgentAppRoot(
                 onConfirm = {
                     agentState.deleteConversation(conversation.id)
                     conversationDeleteTarget = null
+                },
+            )
+        }
+    }
+
+    conversationBatchDeleteTarget?.let { conversations ->
+        WindowDialog(
+            show = true,
+            cornerRadius = DialogDefaults.CornerRadius,
+            title = stringResource(R.string.conversation_delete_title),
+            summary = pluralStringResource(
+                R.plurals.conversation_batch_delete_message,
+                conversations.size,
+                conversations.size,
+            ),
+            onDismissRequest = { conversationBatchDeleteTarget = null },
+        ) {
+            MiuixDialogActions(
+                confirmText = stringResource(R.string.action_delete),
+                destructive = true,
+                onCancel = { conversationBatchDeleteTarget = null },
+                onConfirm = {
+                    conversations.forEach { conversation ->
+                        agentState.deleteConversation(conversation.id)
+                    }
+                    conversationBatchDeleteTarget = null
                 },
             )
         }

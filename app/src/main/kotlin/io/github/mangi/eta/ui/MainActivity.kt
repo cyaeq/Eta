@@ -18,6 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import io.github.mangi.eta.agent.voice.EtaAssistantOverlayService
 import io.github.mangi.eta.agent.display.VirtualScreenSession
 import io.github.mangi.eta.agent.display.VirtualScreenViewerActivity
+import io.github.mangi.eta.agent.runtime.AgentRuntimeService
 import io.github.mangi.eta.agent.runtime.AgentRuntimeWire
 import io.github.mangi.eta.hook.vivo.VivoHandoff
 import io.github.mangi.eta.data.model.AppearanceThemeMode
@@ -41,6 +42,7 @@ class MainActivity : ComponentActivity() {
         installStartupSplash { contentReady }
         enableEdgeToEdge()
         updateAssistantHandoff(intent)
+        handleShareIntent(intent)
         lifecycleScope.launch {
             val initialAppearance = AppearanceSettingsRepository.settings()
             appliedPredictiveBackEnabled = initialAppearance.predictiveBackEnabled
@@ -92,6 +94,76 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         updateAssistantHandoff(intent)
+        handleShareIntent(intent)
+        // Activity 被复用（栈里已有实例）时 AgentAppRoot 的首帧效应不会重跑；
+        // 除了「打开指定会话」由 updateAssistantHandoff 精确清，其他再次进入都按「回到 Eta」整体清未读。
+        if (intent.action != ACTION_OPEN_CONVERSATION_ID) {
+            runCatching {
+                startService(
+                    Intent(this, AgentRuntimeService::class.java)
+                        .setAction(AgentRuntimeService.ACTION_CLEAR_READ),
+                )
+            }
+        }
+    }
+
+    /** 系统分享面板送进来的文字／图片，先暂存起来，界面就绪后由 AgentAppRoot 取走。 */
+    private fun handleShareIntent(intent: Intent?) {
+        val action = intent?.action
+        if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return
+        val text = intent.shareText()
+        val images = intent.shareUris().map { uri ->
+            runCatching {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            uri.toString()
+        }
+        io.github.mangi.eta.core.EtaTrace.log(
+            "share.intent",
+            "收到分享：文字=${text?.length ?: 0} 字，图片=${images.size} 张",
+        )
+        io.github.mangi.eta.ui.app.ShareIntake.offer(text, images)
+        intent.action = null
+    }
+
+    /**
+     * 分享进来的文字：有的应用塞 CharSequence，有的塞 String，还有的只挂在 ClipData 上；
+     * 只读一次 EXTRA_TEXT 会漏，表现就是「提示分享成功、输入框却是空的」。
+     */
+    private fun Intent.shareText(): String? {
+        getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.takeIf { it.isNotBlank() }?.let { return it }
+        @Suppress("DEPRECATION")
+        getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }?.let { return it }
+        val clip = clipData ?: return null
+        for (index in 0 until clip.itemCount) {
+            val item = clip.getItemAt(index)
+            item.text?.toString()?.takeIf { it.isNotBlank() }?.let { return it }
+            item.htmlText?.takeIf { it.isNotBlank() }?.let { return it }
+        }
+        return null
+    }
+
+    /**
+     * 分享进来的图片／文件：EXTRA_STREAM 可能是单个 Uri，也可能是 ArrayList（多选分享），
+     * 有的应用只放进 ClipData；三种来源都要收，否则就是「分享成功但没图」。
+     */
+    private fun Intent.shareUris(): List<android.net.Uri> {
+        val uris = linkedSetOf<android.net.Uri>()
+        runCatching {
+            getParcelableArrayListExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java)
+        }.getOrNull()?.forEach { uri -> uri?.let(uris::add) }
+        runCatching {
+            getParcelableExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java)
+        }.getOrNull()?.let(uris::add)
+        clipData?.let { clip ->
+            for (index in 0 until clip.itemCount) {
+                clip.getItemAt(index)?.uri?.let(uris::add)
+            }
+        }
+        return uris.toList()
     }
 
     private fun updateAssistantHandoff(intent: Intent?) {
@@ -115,7 +187,22 @@ class MainActivity : ComponentActivity() {
             return
         }
         if (intent?.action == ACTION_OPEN_CONVERSATION_ID) {
-            requestedConversationId = intent.getStringExtra(EXTRA_CONVERSATION_ID)?.takeIf(String::isNotBlank)
+            val openedId = intent.getStringExtra(EXTRA_CONVERSATION_ID)?.takeIf(String::isNotBlank)
+            requestedConversationId = openedId
+            // CLEAR_TOP 复用本 Activity 时不重建组合，AgentAppRoot 那次清未读不会重跑；
+            // 这里直接把「点开的这条会话」标成已读，胶囊角标与「最新回复」立刻同步。
+            openedId?.let { conversationId ->
+                runCatching {
+                    startService(
+                        Intent(this, AgentRuntimeService::class.java)
+                            .setAction(AgentRuntimeService.ACTION_MARK_READ)
+                            .putExtra(
+                                AgentRuntimeService.EXTRA_MARK_READ_CONVERSATION_ID,
+                                conversationId,
+                            ),
+                    )
+                }
+            }
             return
         }
         if (intent?.action != EtaAssistantOverlayService.ACTION_OPEN_CONVERSATION) return

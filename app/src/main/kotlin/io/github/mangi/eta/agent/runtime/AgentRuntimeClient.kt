@@ -31,7 +31,10 @@ internal class AgentRuntimeClient(
     }
 
     sealed interface ActiveRunQuery {
-        data class Known(val runId: String?) : ActiveRunQuery
+        data class Known(
+            val runId: String?,
+            val runIds: Set<String> = emptySet(),
+        ) : ActiveRunQuery
         data object Unavailable : ActiveRunQuery
     }
 
@@ -122,6 +125,34 @@ internal class AgentRuntimeClient(
         }
     }
 
+    /** 暂停当前运行：不取消在途请求，下一个检查点生效。 */
+    fun pauseRun() {
+        withRuntimeMessenger(Unit) { serviceMessenger ->
+            serviceMessenger.send(Message.obtain(null, AgentRuntimeWire.MSG_PAUSE))
+        }
+    }
+
+    /** 恢复已暂停的运行。 */
+    fun resumeRun() {
+        withRuntimeMessenger(Unit) { serviceMessenger ->
+            serviceMessenger.send(Message.obtain(null, AgentRuntimeWire.MSG_RESUME))
+        }
+    }
+
+    /** 运行中插话：steering 通道，在下一个 turn 注入，不取消当前请求或工具批次。 */
+    fun steerRun(text: String, conversationId: String = "") {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        withRuntimeMessenger(Unit) { serviceMessenger ->
+            val msg = Message.obtain(null, AgentRuntimeWire.MSG_STEER)
+            msg.data = android.os.Bundle().apply {
+                putString(AgentRuntimeWire.KEY_PROMPT, trimmed)
+                putString(AgentRuntimeWire.KEY_CONVERSATION_ID, conversationId)
+            }
+            serviceMessenger.send(msg)
+        }
+    }
+
     fun ackResult(runId: String): Boolean {
         if (runId.isBlank()) return false
         return withRuntimeMessenger(false) { serviceMessenger ->
@@ -194,9 +225,11 @@ internal class AgentRuntimeClient(
     fun queryActiveRun(): ActiveRunQuery {
         val responseLatch = CountDownLatch(1)
         val runIdRef = AtomicReference("")
+        val runIdsRef = AtomicReference<List<String>>(emptyList())
         val clientMessenger = Messenger(
-            ActiveRunHandler { runId ->
+            ActiveRunHandler { runId, runIds ->
                 runIdRef.set(runId)
+                runIdsRef.set(runIds)
                 responseLatch.countDown()
             }
         )
@@ -208,7 +241,10 @@ internal class AgentRuntimeClient(
             if (!responseLatch.await(RESPONSE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 ActiveRunQuery.Unavailable
             } else {
-                ActiveRunQuery.Known(runIdRef.get().takeIf(String::isNotBlank))
+                val ids = runIdsRef.get().ifEmpty {
+                    listOfNotNull(runIdRef.get().takeIf(String::isNotBlank))
+                }
+                ActiveRunQuery.Known(ids.firstOrNull(), ids.toSet())
             }
         }
     }
@@ -326,11 +362,15 @@ internal class AgentRuntimeClient(
     }
 
     private class ActiveRunHandler(
-        private val onResponse: (String) -> Unit,
+        private val onResponse: (String, List<String>) -> Unit,
     ) : Handler(Looper.getMainLooper()) {
         override fun handleMessage(msg: Message) {
             if (msg.what == AgentRuntimeWire.MSG_QUERY_ACTIVE_RUN_RESPONSE) {
-                onResponse(AgentRuntimeWire.runIdFromBundle(msg.data ?: return))
+                val data = msg.data ?: return
+                onResponse(
+                    AgentRuntimeWire.runIdFromBundle(data),
+                    AgentRuntimeWire.activeRunIdsFromBundle(data),
+                )
             }
         }
     }

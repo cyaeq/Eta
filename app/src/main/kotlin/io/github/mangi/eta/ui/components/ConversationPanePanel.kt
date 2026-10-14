@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +54,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,6 +63,7 @@ import io.github.mangi.eta.R
 import io.github.mangi.eta.ui.app.rememberDeviceCapabilities
 import io.github.mangi.eta.ui.model.ConversationPaneUiState
 import io.github.mangi.eta.ui.model.ConversationSummaryUi
+import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.DropdownDefaults
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.DropdownItem
@@ -85,8 +88,10 @@ import top.yukonga.miuix.kmp.icon.extended.Layers
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Messages
 import top.yukonga.miuix.kmp.icon.extended.Notes
+import top.yukonga.miuix.kmp.icon.extended.Pin
 import top.yukonga.miuix.kmp.icon.extended.Rename
 import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.icon.extended.Unpin
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -130,8 +135,11 @@ internal fun ConversationPanePanel(
     onNewConversation: () -> Unit,
     onConversationSelected: (String) -> Unit,
     onConversationRename: (ConversationSummaryUi) -> Unit,
+    onMoveToCategory: (ConversationSummaryUi) -> Unit,
     onConversationExport: (ConversationSummaryUi) -> Unit,
     onConversationDelete: (ConversationSummaryUi) -> Unit,
+    onConversationPin: (ConversationSummaryUi) -> Unit,
+    onBatchDelete: (List<ConversationSummaryUi>) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenRootSettings: () -> Unit,
     onOpenAccessibilitySettings: () -> Unit,
@@ -141,13 +149,21 @@ internal fun ConversationPanePanel(
     onOpenCharacters: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenTasks: () -> Unit,
+    onOpenCategories: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // state.conversations 已由 AgentAppState 按标题、预览与消息内容过滤。
     val query = state.searchQuery.trim()
-    var moreExpanded by rememberSaveable { mutableStateOf(false) }
+    // 最近打开过的会话：越靠前越新；搜索和批量模式下不显示，免得干扰结果。
+    val recentOpened = state.recentOpenedIds
+        .mapNotNull { id -> state.conversations.firstOrNull { it.id == id } }
+    var batchMode by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf(setOf<String>()) }
+    var collapsedSections by rememberSaveable(
+        stateSaver = listSaver<Set<String>, String>(save = { it.toList() }, restore = { it.toSet() }),
+    ) { mutableStateOf(emptySet<String>()) }
     val capabilities = rememberDeviceCapabilities()
-    val groups = remember(state.conversations) { state.conversations.groupForDrawer() }
+    val groups = remember(state.conversations, state.categories) { state.conversations.groupForDrawer(state.categories) }
 
     Surface(
         modifier = modifier
@@ -192,9 +208,6 @@ internal fun ConversationPanePanel(
                                 modifier = Modifier.weight(1f),
                             )
                         }
-                        IconButton(onClick = onNewConversation, modifier = Modifier.clip(CircleShape).background(MiuixTheme.colorScheme.surfaceContainerHighest)) {
-                            Icon(MiuixIcons.Messages, contentDescription = stringResource(R.string.action_new_conversation), modifier = Modifier.size(22.dp))
-                        }
                     }
                     Spacer(Modifier.height(ConversationPanelMetrics.AfterActionBar))
                 }
@@ -215,35 +228,45 @@ internal fun ConversationPanePanel(
                 verticalArrangement = Arrangement.spacedBy(ConversationPanelMetrics.RowGap),
                 overscrollEffect = null,
             ) {
-                if (query.isBlank()) {
-                    item(key = "shortcuts") {
-                        Column(Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            PaneShortcut(MiuixIcons.Alarm, stringResource(R.string.automation_title), onOpenTasks)
-                            PaneShortcut(MiuixIcons.Contacts, stringResource(R.string.sidebar_characters), onOpenCharacters)
-                            PaneShortcut(MiuixIcons.Lock, stringResource(R.string.sidebar_permissions), onOpenPermissions)
-                            val expansionDescription = stringResource(
-                                if (moreExpanded) R.string.sidebar_more_expanded else R.string.sidebar_more_collapsed,
-                            )
-                            PaneShortcut(
-                                icon = if (moreExpanded) MiuixIcons.ExpandLess else MiuixIcons.ExpandMore,
-                                label = stringResource(R.string.action_more),
-                                onClick = { moreExpanded = !moreExpanded },
-                                modifier = Modifier.semantics { stateDescription = expansionDescription },
-                            )
-                            AnimatedVisibility(visible = moreExpanded) {
-                                Column(Modifier.padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    PaneShortcut(MiuixIcons.GridView, stringResource(R.string.ui_tool_ability_9f0f80), onOpenTools)
-                                    PaneShortcut(MiuixIcons.Layers, stringResource(R.string.sidebar_models), onOpenModelProviders)
-                                    PaneShortcut(MiuixIcons.Notes, stringResource(R.string.sidebar_skills), onOpenSkills)
-                                }
-                            }
-                        }
+                if (query.isBlank() && !batchMode && recentOpened.isNotEmpty()) {
+                    item(key = "recent-opened") {
+                        RecentOpenedSection(
+                            conversations = recentOpened,
+                            onOpen = onConversationSelected,
+                        )
                     }
                 }
                 item(key = "history-heading") {
-                    Text(stringResource(R.string.action_conversation_history), style = MiuixTheme.textStyles.body2,
-                        fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MiuixTheme.colorScheme.onSurface,
-                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 16.dp, bottom = 4.dp).semantics { heading() })
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 10.dp, bottom = 4.dp, end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (batchMode) "已选 ${selectedIds.size} 项" else stringResource(R.string.action_conversation_history),
+                            style = MiuixTheme.textStyles.body2,
+                            fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MiuixTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f).semantics { heading() },
+                        )
+                        if (batchMode) {
+                            Text("全选", color = MiuixTheme.colorScheme.primary, fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 8.dp).clickable {
+                                    selectedIds = state.conversations.filterNot { it.isPinned || state.categories.any { c -> c.first == it.categoryId } }.map { it.id }.toSet()
+                                })
+                            Text("取消", color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 8.dp).clickable {
+                                    batchMode = false; selectedIds = emptySet()
+                                })
+                            Text("删除", color = if (selectedIds.isEmpty()) MiuixTheme.colorScheme.onSurfaceVariantSummary else MiuixTheme.colorScheme.error,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 8.dp).clickable(enabled = selectedIds.isNotEmpty()) {
+                                    onBatchDelete(state.conversations.filter { it.id in selectedIds && !it.isPinned })
+                                    batchMode = false; selectedIds = emptySet()
+                                })
+                        } else {
+                            Text("批量删除", color = MiuixTheme.colorScheme.primary, fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 8.dp).clickable { batchMode = true; selectedIds = emptySet() })
+                        }
+                    }
                 }
                 if (state.conversations.isEmpty()) {
                     item {
@@ -251,20 +274,44 @@ internal fun ConversationPanePanel(
                     }
                 } else {
                     groups.forEach { group ->
-                        item(key = "section-${group.section}") {
-                            ConversationSectionHeader(group = group)
+                        val sectionKey = group.section.storageKey()
+                        val collapsed = sectionKey in collapsedSections
+                        item(key = "section-$sectionKey") {
+                            ConversationSectionHeader(
+                                group = group,
+                                collapsed = collapsed,
+                                onToggle = {
+                                    collapsedSections = if (collapsed) collapsedSections - sectionKey else collapsedSections + sectionKey
+                                },
+                                // 分类分组标题上的入口只进入多选（不预勾任何一条），整组删除不再有一键路径
+                                onDeleteCategory = if (group.section is ConversationDrawerSection.Category) {
+                                    { batchMode = true; selectedIds = emptySet() }
+                                } else null,
+                            )
                         }
+                        if (collapsed) return@forEach
+                        val visibleItems = group.items
                         items(
-                            items = group.items,
+                            items = visibleItems,
                             key = { it.id },
                         ) { conversation ->
                             ConversationTextRow(
                                 conversation = conversation,
                                 selected = conversation.id == state.selectedConversationId,
-                                onClick = { onConversationSelected(conversation.id) },
+                                batchMode = batchMode,
+                                checked = conversation.id in selectedIds,
+                                onClick = {
+                                    if (batchMode) {
+                                        selectedIds = if (conversation.id in selectedIds) selectedIds - conversation.id else selectedIds + conversation.id
+                                    } else {
+                                        onConversationSelected(conversation.id)
+                                    }
+                                },
                                 onRename = { onConversationRename(conversation) },
                                 onExport = { onConversationExport(conversation) },
                                 onDelete = { onConversationDelete(conversation) },
+                                onPin = { onConversationPin(conversation) },
+                                onMoveToCategory = { onMoveToCategory(conversation) },
                             )
                         }
                     }
@@ -357,7 +404,6 @@ private fun PaneModeBadges(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         if (rootGranted) PaneModeBadge(stringResource(R.string.sidebar_mode_root), onClick = onOpenRootSettings)
-        if (accessibilityAvailable) PaneModeBadge(stringResource(R.string.sidebar_mode_accessibility), onClick = onOpenAccessibilitySettings)
         if (!rootGranted && !accessibilityAvailable) PaneModeBadge(stringResource(R.string.sidebar_mode_basic), onClick = onOpenSettings, active = false)
     }
 }
@@ -381,21 +427,104 @@ private fun PaneModeBadge(label: String, onClick: () -> Unit, active: Boolean = 
 }
 
 @Composable
-private fun ConversationSectionHeader(group: ConversationDrawerGroup) {
-    Text(group.localizedLabel(), color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-        style = MiuixTheme.textStyles.footnote1, fontSize = 11.sp, fontWeight = FontWeight.Normal,
-        modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp).semantics { heading() })
+private fun ConversationSectionHeader(
+    group: ConversationDrawerGroup,
+    collapsed: Boolean,
+    onToggle: () -> Unit,
+    onDeleteCategory: (() -> Unit)?,
+) {
+    val headerLabel = group.localizedLabel()
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(end = 10.dp)
+                .size(width = 3.dp, height = 16.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(
+                    if (collapsed) {
+                        MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.4f)
+                    } else {
+                        MiuixTheme.colorScheme.primary
+                    },
+                ),
+        )
+        Text(headerLabel, color = MiuixTheme.colorScheme.onSurface,
+            style = MiuixTheme.textStyles.body1, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f).semantics { heading() })
+        Text(
+            if (collapsed) "▸" else "▾",
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            style = MiuixTheme.textStyles.footnote1, fontSize = 12.sp,
+            modifier = Modifier.padding(start = 6.dp),
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
+/** 侧栏最上面一栏：最近打开过的对话，最多 3 条，多的折叠成 +N。 */
+@Composable
+private fun RecentOpenedSection(
+    conversations: List<ConversationSummaryUi>,
+    onOpen: (String) -> Unit,
+) {
+    val expanded = remember { mutableStateOf(false) }
+    val shown = if (expanded.value) conversations else conversations.take(3)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 10.dp, bottom = 4.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "最近打开",
+                style = MiuixTheme.textStyles.body2,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MiuixTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            if (conversations.size > 3) {
+                Text(
+                    if (expanded.value) "收起" else "+${conversations.size - 3}",
+                    color = MiuixTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 8.dp).clickable { expanded.value = !expanded.value },
+                )
+            }
+        }
+        shown.forEach { conversation ->
+            Text(
+                text = conversation.title.ifBlank { conversation.preview }.ifBlank { "会话" },
+                color = MiuixTheme.colorScheme.onSurface,
+                fontSize = 15.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onOpen(conversation.id) }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun ConversationTextRow(
     conversation: ConversationSummaryUi,
     selected: Boolean,
+    batchMode: Boolean = false,
+    checked: Boolean = false,
     onClick: () -> Unit,
     onRename: () -> Unit,
     onExport: () -> Unit,
     onDelete: () -> Unit,
+    onPin: () -> Unit,
+    onMoveToCategory: () -> Unit,
 ) {
     var showActionMenu by remember { mutableStateOf(false) }
     val hapticFeedback = LocalHapticFeedback.current
@@ -427,20 +556,34 @@ private fun ConversationTextRow(
                 ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (batchMode) {
+                Checkbox(state = if (checked) ToggleableState.On else ToggleableState.Off, onClick = onClick, modifier = Modifier.padding(end = 4.dp))
+            }
             Column(modifier = Modifier.weight(1f)) {
             val title = conversation.title.ifBlank { conversation.preview }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (conversation.isPinned) {
+                Icon(
+                    imageVector = MiuixIcons.Pin,
+                    contentDescription = stringResource(R.string.conversation_pin_marker),
+                    tint = MiuixTheme.colorScheme.primary,
+                    modifier = Modifier.size(13.dp),
+                )
+            }
             Text(
+                modifier = Modifier.weight(1f),
                 text = title,
                 color = if (selected) {
                     MiuixTheme.colorScheme.primary
                 } else {
                     MiuixTheme.colorScheme.onSurface
                 },
-                style = MiuixTheme.textStyles.body1,
+                style = MiuixTheme.textStyles.body2,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            }
             // 标题与角色名相同（如未改名的角色会话）时不再重复第二行。
             conversation.characterName?.takeIf { it != title }?.let { name ->
                 Text(name, style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -463,9 +606,24 @@ private fun ConversationTextRow(
             alignment = PopupPositionProvider.Align.BottomEnd,
             onDismissRequest = { showActionMenu = false },
         ) {
+            val pinText = stringResource(if (conversation.isPinned) R.string.action_unpin else R.string.action_pin)
+            val moveText = stringResource(R.string.conversation_category_move)
             val renameText = stringResource(R.string.action_rename)
             val exportText = stringResource(R.string.action_export)
             val deleteText = stringResource(R.string.action_delete)
+            val moveItem = remember(moveText) {
+                DropdownItem(
+                    text = moveText,
+                    icon = { modifier ->
+                        Icon(
+                            imageVector = MiuixIcons.Notes,
+                            contentDescription = null,
+                            modifier = modifier.size(ConversationPanelMetrics.ActionIconSize),
+                        )
+                    },
+                )
+            }
+
             val renameItem = remember(renameText) {
                 DropdownItem(
                     text = renameText,
@@ -503,6 +661,19 @@ private fun ConversationTextRow(
                     },
                 )
             }
+            val pinItem = remember(pinText, conversation.isPinned) {
+                DropdownItem(
+                    text = pinText,
+                    icon = { modifier ->
+                        Icon(
+                            imageVector = if (conversation.isPinned) MiuixIcons.Unpin else MiuixIcons.Pin,
+                            contentDescription = null,
+                            modifier = modifier.size(ConversationPanelMetrics.ActionIconSize),
+                            tint = MiuixTheme.colorScheme.primary,
+                        )
+                    },
+                )
+            }
             val deleteColors = DropdownDefaults.dropdownColors(
                 contentColor = MiuixTheme.colorScheme.error,
                 selectedContentColor = MiuixTheme.colorScheme.error,
@@ -510,10 +681,31 @@ private fun ConversationTextRow(
             )
             ListPopupColumn {
                 DropdownImpl(
-                    item = renameItem,
-                    optionSize = 3,
+                    item = pinItem,
+                    optionSize = 5,
                     isSelected = false,
                     index = 0,
+                    onSelectedIndexChange = {
+                        showActionMenu = false
+                        onPin()
+                    },
+                )
+                DropdownImpl(
+                    item = moveItem,
+                    optionSize = 5,
+                    isSelected = false,
+                    index = 1,
+                    onSelectedIndexChange = {
+                        showActionMenu = false
+                        onMoveToCategory()
+                    },
+                )
+
+                DropdownImpl(
+                    item = renameItem,
+                    optionSize = 5,
+                    isSelected = false,
+                    index = 2,
                     onSelectedIndexChange = {
                         showActionMenu = false
                         onRename()
@@ -521,9 +713,9 @@ private fun ConversationTextRow(
                 )
                 DropdownImpl(
                     item = exportItem,
-                    optionSize = 3,
+                    optionSize = 5,
                     isSelected = false,
-                    index = 1,
+                    index = 3,
                     onSelectedIndexChange = {
                         showActionMenu = false
                         onExport()
@@ -531,9 +723,9 @@ private fun ConversationTextRow(
                 )
                 DropdownImpl(
                     item = deleteItem,
-                    optionSize = 3,
+                    optionSize = 5,
                     isSelected = false,
-                    index = 2,
+                    index = 4,
                     dropdownColors = deleteColors,
                     onSelectedIndexChange = {
                         showActionMenu = false
@@ -586,6 +778,7 @@ private sealed interface ConversationDrawerSection {
     data object Pinned : ConversationDrawerSection
     data object Today : ConversationDrawerSection
     data class Dated(val label: String) : ConversationDrawerSection
+    data class Category(val id: String?, val name: String) : ConversationDrawerSection
 }
 
 @Composable
@@ -593,9 +786,41 @@ private fun ConversationDrawerGroup.localizedLabel(): String = when (val value =
     ConversationDrawerSection.Pinned -> stringResource(R.string.conversation_section_pinned)
     ConversationDrawerSection.Today -> stringResource(R.string.conversation_section_today)
     is ConversationDrawerSection.Dated -> value.label
+    is ConversationDrawerSection.Category -> value.name.ifBlank { stringResource(R.string.conversation_category_uncategorized) }
 }
 
-private fun List<ConversationSummaryUi>.groupForDrawer(): List<ConversationDrawerGroup> {
+private fun ConversationDrawerSection.storageKey(): String = when (this) {
+    ConversationDrawerSection.Pinned -> "pinned"
+    ConversationDrawerSection.Today -> "today"
+    is ConversationDrawerSection.Dated -> "dated:$label"
+    is ConversationDrawerSection.Category -> "category:${id ?: "-"}"
+}
+
+private fun List<ConversationSummaryUi>.groupForDrawer(categories: List<Pair<String, String>>): List<ConversationDrawerGroup> {
+    // 有会话归属分类时按「置顶 / 各分类 / 未分类」分组，否则回退到时间分组。
+    val known = categories.toMap()
+    if (known.isNotEmpty() && any { it.categoryId != null && known.containsKey(it.categoryId) }) {
+        val categorizedGroups = mutableListOf<ConversationDrawerGroup>()
+        val pinnedItems = filter { it.isPinned }
+        if (pinnedItems.isNotEmpty()) {
+            categorizedGroups += ConversationDrawerGroup(ConversationDrawerSection.Pinned, pinnedItems)
+        }
+        val rest = filterNot { it.isPinned }
+        categories.forEach { (categoryId, categoryName) ->
+            val items = rest.filter { it.categoryId == categoryId }
+            if (items.isNotEmpty()) {
+                categorizedGroups += ConversationDrawerGroup(
+                    ConversationDrawerSection.Category(categoryId, categoryName),
+                    items,
+                )
+            }
+        }
+        val loose = rest.filter { it.categoryId == null || !known.containsKey(it.categoryId) }
+        if (loose.isNotEmpty()) {
+            categorizedGroups += ConversationDrawerGroup(ConversationDrawerSection.Category(null, ""), loose)
+        }
+        return categorizedGroups
+    }
     if (isEmpty()) return emptyList()
     val groups = mutableListOf<ConversationDrawerGroup>()
     for (conversation in this) {
@@ -624,3 +849,4 @@ private fun isUpdatedToday(timestampMillis: Long): Boolean {
         now.get(java.util.Calendar.YEAR) == target.get(java.util.Calendar.YEAR) &&
         now.get(java.util.Calendar.DAY_OF_YEAR) == target.get(java.util.Calendar.DAY_OF_YEAR)
 }
+
