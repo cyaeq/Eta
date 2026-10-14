@@ -219,8 +219,9 @@ private fun AgentTopBar(
     }
     val actions: @Composable RowScope.() -> Unit = {
         if (isHome) {
-            conversationStatus?.invoke()
-            // 顶栏第一排：紧挨速度/内存/工具档，放一个新建对话入口。
+            // 顶栏第一排只留新建对话与溢出菜单。
+            // 状态胶囊组不再挤在这一行：手机宽度装不下「导航图标 + 三枚胶囊 + 两个按钮」，
+            // 胶囊组会向左溢出盖住导航图标（token 破 100K 后文字变长时尤其明显）。
             IconButton(onClick = onNewConversation) {
                 Icon(
                     imageVector = Icons.Rounded.AddComment,
@@ -241,6 +242,10 @@ private fun AgentTopBar(
             )
         }
     }
+    // 状态胶囊单独占一行（bottomContent），拿满整条栏宽，不会再和导航图标、右侧按钮抢位置。
+    val statusRow: @Composable () -> Unit = {
+        if (isHome) conversationStatus?.invoke()
+    }
 
     if (isHome) {
         // 首页聊天舞台保持紧凑；二级内容页统一使用可折叠大标题。
@@ -250,8 +255,9 @@ private fun AgentTopBar(
             scrollBehavior = scrollBehavior,
             navigationIcon = navigationIcon,
             actions = actions,
+            bottomContent = statusRow,
             // miuix 的 actions 行本身是 Arrangement.End（靠右），右边原来有 16dp 默认留白，
-            // 收到 6dp：胶囊组、＋、⋯ 一起往右贴，行尾也不空。
+            // 收到 6dp：＋、⋯ 一起往右贴，行尾也不空。
             actionIconPadding = 6.dp,
         )
     } else {

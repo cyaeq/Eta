@@ -3,8 +3,8 @@ package io.github.mangi.eta.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -54,8 +54,14 @@ internal fun ConversationStatusCapsules(
     val speedText = speed?.let {
         NumberFormat.getNumberInstance().apply { maximumFractionDigits = 1 }.format(it)
     } ?: "—"
-    Row(Modifier.widthIn(max = 420.dp).padding(start = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    // 独占一行（顶栏 bottomContent），拿满整条栏宽并与导航图标左对齐。
+    // 绝不吃掉导航图标和右侧按钮的位置；万一内容还是过长，只有可伸缩的上下文胶囊会被省略号截断。
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 12.dp, bottom = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
         StatusCapsule(contextText, Modifier.weight(1f, fill = false), contextDescription)
         MemoryUsageCapsule()
         LocalProfileTopBarCapsule(model)
