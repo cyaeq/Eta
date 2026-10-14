@@ -1,12 +1,14 @@
 package io.github.mangi.eta.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -54,17 +56,21 @@ internal fun ConversationStatusCapsules(
     val speedText = speed?.let {
         NumberFormat.getNumberInstance().apply { maximumFractionDigits = 1 }.format(it)
     } ?: "—"
-    // 独占一行（顶栏 bottomContent），拿满整条栏宽并与导航图标左对齐。
-    // 绝不吃掉导航图标和右侧按钮的位置；万一内容还是过长，只有可伸缩的上下文胶囊会被省略号截断。
+    // 独占一行（顶栏 bottomContent），整条栏宽由 Row 拿满，胶囊靠右贴。
+    // 行首用可伸缩 Spacer 占掉剩余空间，而不是 Arrangement.End：内容超宽时 Spacer 会先归零，
+    // 不会像 End 那样把整组胶囊顶到屏幕外。
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 12.dp, bottom = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(start = 16.dp, end = 8.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        StatusCapsule(contextText, Modifier.weight(1f, fill = false), contextDescription)
+        Spacer(Modifier.weight(1f))
+        StatusCapsule(contextText, Modifier, contextDescription)
+        Spacer(Modifier.width(CapsuleGap))
         MemoryUsageCapsule()
         trimmed?.let { (rounds, count) ->
+            Spacer(Modifier.width(CapsuleGap))
             StatusCapsule(
                 stringResource(R.string.conversation_trimmed_capsule, count), Modifier,
                 stringResource(R.string.conversation_trimmed_description, rounds),
@@ -72,6 +78,7 @@ internal fun ConversationStatusCapsules(
         }
         downgradedProfileId?.let { id ->
             val label = stringResource(profileLabel(LocalToolProfile.fromId(id)))
+            Spacer(Modifier.width(CapsuleGap))
             StatusCapsule(
                 stringResource(R.string.conversation_downgrade_capsule, label), Modifier,
                 stringResource(R.string.conversation_downgrade_description, label),
@@ -80,11 +87,8 @@ internal fun ConversationStatusCapsules(
     }
 }
 
-/** 胶囊内文字与内边距：比 Miuix 默认小一圈，顶栏下面那行不至于抢戏。 */
-private val CapsuleFontSize = 10.sp
-private val CapsuleLineHeight = 13.sp
-private val CapsuleHorizontalPadding = 7.dp
-private val CapsuleVerticalPadding = 3.dp
+/** 状态行里相邻两枚胶囊的间距。 */
+private val CapsuleGap = 4.dp
 
 /** 输入栏左侧的上下文用量文字胶囊：`125.67K/200K · 62.8%`。 */
 @Composable
@@ -104,12 +108,10 @@ internal fun AgentContextUsageCapsule(
         text = text,
         modifier = modifier
             .background(etaTranslucent(MiuixTheme.colorScheme.surfaceContainer), CircleShape)
-            .padding(horizontal = CapsuleHorizontalPadding, vertical = CapsuleVerticalPadding),
+            .padding(horizontal = 8.dp, vertical = 5.dp),
         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
         style = MiuixTheme.textStyles.footnote1,
-        fontSize = CapsuleFontSize,
-        lineHeight = CapsuleLineHeight,
-        maxLines = 1,
+        fontSize = 11.sp,
     )
 }
 
@@ -117,12 +119,9 @@ internal fun AgentContextUsageCapsule(
 internal fun StatusCapsule(text: String, modifier: Modifier, description: String = text) {
     Text(text,
         modifier = modifier.background(etaTranslucent(MiuixTheme.colorScheme.surfaceContainer), CircleShape)
-            .semantics { contentDescription = description }
-            .padding(horizontal = CapsuleHorizontalPadding, vertical = CapsuleVerticalPadding),
+            .semantics { contentDescription = description }.padding(horizontal = 8.dp, vertical = 5.dp),
         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-        style = MiuixTheme.textStyles.footnote1,
-        fontSize = CapsuleFontSize,
-        lineHeight = CapsuleLineHeight,
+        style = MiuixTheme.textStyles.footnote1, fontSize = 11.sp,
         maxLines = 1, overflow = TextOverflow.Ellipsis,
     )
 }

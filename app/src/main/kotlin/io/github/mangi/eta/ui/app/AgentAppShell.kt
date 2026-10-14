@@ -236,11 +236,7 @@ private fun AgentTopBar(
             // 状态胶囊组不再挤在这里：手机宽度装不下「导航图标 + 三枚胶囊 + 两个按钮」，
             // 胶囊组会向左溢出盖住导航图标（token 破 100K 后文字变长时尤其明显）。
             profileAction?.invoke()
-            IconButton(
-                onClick = onNewConversation,
-                minWidth = TopBarActionButtonSize,
-                minHeight = TopBarActionButtonSize,
-            ) {
+            IconButton(onClick = onNewConversation) {
                 Icon(
                     imageVector = Icons.Rounded.AddComment,
                     contentDescription = stringResource(R.string.action_new_conversation),
@@ -294,10 +290,12 @@ private fun AgentTopBar(
 
 private val TopBarMenuIconSize = 20.dp
 
-/** 首页顶栏两个操作按钮的触摸区。默认 48dp 在 363dp 宽的屏上太占位，收到 40dp 给标题让路。 */
-private val TopBarActionButtonSize = 40.dp
-
-/** 首页标题的横向内边距。Miuix 默认 26dp 是给居中大标题的，靠左显示后不需要。 */
+/**
+ * 首页标题的横向内边距。
+ *
+ * Miuix 默认 26dp 是给居中大标题留的呼吸空间；首页标题靠左显示、左边已经有导航图标兜着，
+ * 这份内边距就纯属浪费。这台机器只有 363dp 宽，左右各省 18dp ≈ 多显示 3 个汉字。
+ */
 private val HomeTitlePadding = 8.dp
 
 /**
@@ -318,11 +316,7 @@ private fun TopBarOverflowMenu(
 ) {
     var showMenu by remember { mutableStateOf(false) }
     Box {
-        IconButton(
-            onClick = { onRefreshKimiWeb(); showMenu = true },
-            minWidth = TopBarActionButtonSize,
-            minHeight = TopBarActionButtonSize,
-        ) {
+        IconButton(onClick = { onRefreshKimiWeb(); showMenu = true }) {
             Icon(
                 imageVector = Icons.Outlined.MoreHoriz,
                 modifier = Modifier.size(24.dp),

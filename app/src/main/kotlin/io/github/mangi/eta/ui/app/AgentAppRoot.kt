@@ -317,7 +317,7 @@ fun AgentAppRoot(
             onOpenConversationPane = { conversationPaneOpen = true },
             onDismissConversationPane = { conversationPaneOpen = false },
             profileAction = {
-                io.github.mangi.eta.ui.components.LocalProfileTopBarAction(
+                io.github.mangi.eta.ui.components.LocalProfileTopBarCapsule(
                     agentState.modelPickerState.selectedModel,
                 )
             },
