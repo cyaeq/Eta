@@ -37,7 +37,9 @@ internal fun TopBarBackdrop(
 ) {
     val surfaceColor = MiuixTheme.colorScheme.surface
     val modifier = when {
-        backdrop == null -> Modifier.background(surfaceColor)
+        // 运行时不支持模糊时没有毛玻璃可依托，退化成半透明底：壁纸仍然透得出来，
+        // 只是少了模糊质感。没设置背景图时 etaTranslucent 返回原色，顶栏保持不透明。
+        backdrop == null -> Modifier.background(etaTranslucent(surfaceColor, TopBarFallbackSurfaceAlpha))
         LocalTopBarBlurStyle.current == AppearanceTopBarBlurStyle.PROGRESSIVE -> {
             Modifier.progressiveTextureBlur(
                 backdrop = backdrop,
@@ -70,11 +72,17 @@ internal fun TopBarBackdrop(
 internal fun Modifier.captureForTopBar(backdrop: LayerBackdrop?): Modifier =
     if (backdrop == null) this else layerBackdrop(backdrop)
 
+/**
+ * 顶栏容器色。
+ *
+ * 底色统一由 [TopBarBackdrop] 负责绘制（毛玻璃或半透明回落），这里始终返回透明，
+ * 避免顶栏自己再铺一层把模糊效果盖掉。
+ */
 @Composable
-internal fun topBarContainerColor(backdrop: LayerBackdrop?): Color =
-    if (backdrop == null) MiuixTheme.colorScheme.surface else Color.Transparent
+internal fun topBarContainerColor(backdrop: LayerBackdrop?): Color = Color.Transparent
 
 private const val TopBarBlurRadius = 25f
-private const val TopBarSurfaceAlpha = 0.8f
+private const val TopBarSurfaceAlpha = 0.62f
+private const val TopBarFallbackSurfaceAlpha = 0.82f
 private const val ProgressiveTopBarBlurRadius = 10f
 private const val ProgressiveTopBarSurfaceAlpha = 0.3f

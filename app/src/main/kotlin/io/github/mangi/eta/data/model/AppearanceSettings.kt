@@ -12,8 +12,8 @@ const val MIN_BACKGROUND_DIM = 0f
 /** 背景图暗化上限，保留一点可见度，避免完全看不到图。 */
 const val MAX_BACKGROUND_DIM = 0.8f
 
-/** 默认暗化程度：在深色文字主题与浅色文字主题下都能保证前景可读。 */
-const val DEFAULT_BACKGROUND_DIM = 0.35f
+/** 默认暗化程度：够压住高亮区域，同时让壁纸本身还能看清。 */
+const val DEFAULT_BACKGROUND_DIM = 0.2f
 
 @Serializable
 data class AppearanceSettings(

@@ -17,7 +17,7 @@ internal object EtaCardDefaults {
     val CornerRadius = 16.dp
 
     /** 设置了自定义背景图时卡片的容器色透明度：够透看到壁纸，又不至于压不住正文。 */
-    const val BackgroundCardAlpha = 0.72f
+    const val BackgroundCardAlpha = 0.5f
 }
 
 /**
