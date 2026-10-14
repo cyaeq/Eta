@@ -41,6 +41,13 @@ internal object EtaControlDefaults {
      * - false：Miuix 默认的贴底弹出层（贴底滑入，圆角跟随屏幕）
      */
     val DialogCentered = true
+
+    /**
+     * 手机上是否使用紧凑标题栏。
+     * - true：标题固定成一行（RikkaHub 那种），不随滚动折叠成超大号
+     * - false：Miuix 默认的大标题，展开时占掉接近四分之一屏
+     */
+    val CompactTopBarOnPhone = true
 }
 
 @Composable

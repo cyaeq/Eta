@@ -125,7 +125,7 @@ internal fun AgentTasksScreen(onBack: () -> Unit) {
                 "completed" -> EtaPreferenceColors.Green
                 "failed", "interrupted" -> colors.error
                 "queued", "running" -> colors.primary
-                "configuration_required" -> EtaPreferenceColors.Orange
+                "configuration_required" -> EtaPreferenceColors.Yellow
                 else -> colors.onSurfaceVariantSummary
             }
             EtaPreferenceGroup {

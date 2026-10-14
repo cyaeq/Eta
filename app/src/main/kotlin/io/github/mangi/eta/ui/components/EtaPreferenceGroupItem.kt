@@ -23,15 +23,16 @@ internal fun EtaPreferenceGroupItem(
 ) {
     val colors = MiuixTheme.colorScheme
     val radius = EtaCardDefaults.CornerRadius
+    val containerColor = etaGroupContainerColor()
     val surface = if (isFirst || isLast) {
         Modifier.squircleSurface(
-            color = colors.surfaceContainer,
+            color = containerColor,
             topStart = if (isFirst) radius else 0.dp,
             topEnd = if (isFirst) radius else 0.dp,
             bottomStart = if (isLast) radius else 0.dp,
             bottomEnd = if (isLast) radius else 0.dp,
         )
-    } else Modifier.background(colors.surfaceContainer)
+    } else Modifier.background(containerColor)
     CompositionLocalProvider(LocalContentColor provides colors.onSurfaceContainer) {
         Column(modifier.fillMaxWidth().padding(horizontal = EtaPreferenceDefaults.SidePadding).then(surface)) {
             content()

@@ -322,7 +322,7 @@ private fun ToolActivityDetail(
                     modifier = Modifier
                         .fillMaxWidth()
                         .squircleSurface(
-                            color = MiuixTheme.colorScheme.surfaceContainer,
+                            color = etaTranslucent(MiuixTheme.colorScheme.surfaceContainer),
                             cornerRadius = 10.dp,
                         )
                         .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -404,7 +404,7 @@ private fun BrowserPagePreview(
         modifier = modifier
             .fillMaxWidth()
             .squircleSurface(
-                color = MiuixTheme.colorScheme.surfaceContainer,
+                color = etaTranslucent(MiuixTheme.colorScheme.surfaceContainer),
                 cornerRadius = 10.dp,
             ),
     ) {
@@ -493,7 +493,7 @@ private fun ToolCommandBlock(
         modifier = modifier
             .fillMaxWidth()
             .squircleSurface(
-                color = MiuixTheme.colorScheme.surface,
+                color = etaTranslucent(MiuixTheme.colorScheme.surface),
                 cornerRadius = 10.dp,
             )
             .squircleBorder(

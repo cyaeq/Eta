@@ -278,7 +278,7 @@ internal fun AgentChatInputBar(
                         ),
                     )
                     .squircleSurface(
-                        color = MiuixTheme.colorScheme.surfaceContainer,
+                        color = etaTranslucent(MiuixTheme.colorScheme.surfaceContainer),
                         cornerRadius = 20.dp,
                     )
                     .squircleBorder(
@@ -580,7 +580,7 @@ private fun PendingImageStrip(
                 modifier = Modifier
                     .size(60.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(MiuixTheme.colorScheme.surfaceContainer),
+                    .background(etaTranslucent(MiuixTheme.colorScheme.surfaceContainer)),
             ) {
                 rememberDataUrlBitmap(image.dataUrl)?.let { bitmap ->
                     Image(

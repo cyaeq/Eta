@@ -10,7 +10,7 @@ import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/** 宽屏固定小标题，手机使用可折叠大标题。 */
+/** 宽屏固定小标题；手机按 [EtaControlDefaults.CompactTopBarOnPhone] 决定用紧凑标题还是可折叠大标题。 */
 @Composable
 fun AdaptiveTopAppBar(
     title: String,
@@ -21,7 +21,7 @@ fun AdaptiveTopAppBar(
     actions: @Composable RowScope.() -> Unit = {},
     bottomContent: @Composable () -> Unit = {},
 ) {
-    if (rememberIsWideScreen()) {
+    if (rememberIsWideScreen() || EtaControlDefaults.CompactTopBarOnPhone) {
         SmallTopAppBar(
             title = title,
             modifier = modifier,

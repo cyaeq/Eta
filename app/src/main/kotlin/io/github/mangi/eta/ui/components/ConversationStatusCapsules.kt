@@ -92,7 +92,7 @@ internal fun AgentContextUsageCapsule(
     Text(
         text = text,
         modifier = modifier
-            .background(MiuixTheme.colorScheme.surfaceContainer, CircleShape)
+            .background(etaTranslucent(MiuixTheme.colorScheme.surfaceContainer), CircleShape)
             .padding(horizontal = 8.dp, vertical = 5.dp),
         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
         style = MiuixTheme.textStyles.footnote1,
@@ -103,7 +103,7 @@ internal fun AgentContextUsageCapsule(
 @Composable
 internal fun StatusCapsule(text: String, modifier: Modifier, description: String = text) {
     Text(text,
-        modifier = modifier.background(MiuixTheme.colorScheme.surfaceContainer, CircleShape)
+        modifier = modifier.background(etaTranslucent(MiuixTheme.colorScheme.surfaceContainer), CircleShape)
             .semantics { contentDescription = description }.padding(horizontal = 8.dp, vertical = 5.dp),
         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
         style = MiuixTheme.textStyles.footnote1, fontSize = 11.sp,

@@ -19,7 +19,7 @@ fun ToolChip(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(MiuixTheme.colorScheme.surfaceContainerHigh),
+            .background(etaTranslucent(MiuixTheme.colorScheme.surfaceContainerHigh)),
     ) {
         Text(
             text = text,

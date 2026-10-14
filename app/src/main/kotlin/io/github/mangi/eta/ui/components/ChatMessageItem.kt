@@ -568,7 +568,7 @@ private fun ContextCompactionMarker(
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(percent = 50))
-                .background(MiuixTheme.colorScheme.surface)
+                .background(etaTranslucent(MiuixTheme.colorScheme.surface))
                 .border(
                     0.5.dp,
                     MiuixTheme.colorScheme.outline.copy(alpha = 0.5f),
@@ -881,7 +881,7 @@ internal fun ThinkingRow(
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 4.dp)
             .squircleSurface(
-                color = MiuixTheme.colorScheme.surface,
+                color = etaTranslucent(MiuixTheme.colorScheme.surface),
                 cornerRadius = 14.dp,
             )
             .squircleBorder(
@@ -1061,7 +1061,7 @@ private fun RunTraceRow(
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 4.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(MiuixTheme.colorScheme.surface)
+            .background(etaTranslucent(MiuixTheme.colorScheme.surface))
             .border(
                 0.5.dp,
                 MiuixTheme.colorScheme.outline.copy(alpha = 0.55f),
@@ -1113,7 +1113,7 @@ private fun ToolSummaryInline(
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
-                    .background(MiuixTheme.colorScheme.surface)
+                    .background(etaTranslucent(MiuixTheme.colorScheme.surface))
                     .border(
                         0.5.dp,
                         MiuixTheme.colorScheme.outline.copy(alpha = 0.5f),
@@ -1159,7 +1159,7 @@ private fun SuggestionChipsRow(
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
-                    .background(MiuixTheme.colorScheme.surface)
+                    .background(etaTranslucent(MiuixTheme.colorScheme.surface))
                     .border(
                         0.5.dp,
                         MiuixTheme.colorScheme.outline.copy(alpha = 0.55f),

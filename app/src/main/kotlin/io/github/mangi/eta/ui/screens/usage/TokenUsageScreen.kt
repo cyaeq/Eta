@@ -34,7 +34,6 @@ import io.github.mangi.eta.data.usage.TokenUsageExporter
 import io.github.mangi.eta.data.usage.TokenUsageRecorder
 import io.github.mangi.eta.ui.components.EtaArrowPreference
 import io.github.mangi.eta.ui.components.EtaPreference
-import io.github.mangi.eta.ui.components.EtaPreferenceColors
 import io.github.mangi.eta.ui.components.EtaPreferenceDivider
 import io.github.mangi.eta.ui.components.EtaPreferenceGroup
 import io.github.mangi.eta.ui.components.MiuixScaffoldPage
@@ -252,7 +251,7 @@ private fun TrendChart(days: List<Pair<LocalDate, Int>>) {
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(fraction)
-                    .background(EtaPreferenceColors.Blue, RoundedCornerShape(2.dp)),
+                    .background(MiuixTheme.colorScheme.primary, RoundedCornerShape(2.dp)),
             )
         }
     }

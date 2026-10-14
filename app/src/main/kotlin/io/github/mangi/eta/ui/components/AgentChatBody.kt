@@ -1007,7 +1007,7 @@ private fun AgentChatBottomBar(
         if (messageBackdrop != null) {
             val blurColors = BlurDefaults.blurColors(
                 blendColors = listOf(
-                    BlendColorEntry(MiuixTheme.colorScheme.surface.copy(alpha = 0.72f))
+                    BlendColorEntry(MiuixTheme.colorScheme.surface.copy(alpha = ChatBottomSurfaceAlpha))
                 ),
             )
             Box(
@@ -1053,7 +1053,24 @@ private fun AgentChatBottomBar(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MiuixTheme.colorScheme.surface)
+                // 过渡条已经磨砂时，输入区跟着一起磨砂透壁纸，输入框才有"浮在壁纸上"的观感；
+                // 没有磨砂（无消息或关掉模糊）时保持原来不透明的 surface，行为不变。
+                .then(
+                    if (messageBackdrop != null) {
+                        Modifier.textureBlur(
+                            backdrop = messageBackdrop,
+                            shape = RectangleShape,
+                            blurRadius = 20f,
+                            colors = BlurDefaults.blurColors(
+                                blendColors = listOf(
+                                    BlendColorEntry(MiuixTheme.colorScheme.surface.copy(alpha = ChatBottomSurfaceAlpha)),
+                                ),
+                            ),
+                        )
+                    } else {
+                        Modifier.background(MiuixTheme.colorScheme.surface)
+                    },
+                )
                 .navigationBarsPadding()
                 .padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
         ) {
@@ -1095,6 +1112,9 @@ private fun AgentChatBottomBar(
 }
 
 private val ChatBottomFrostHeight = 24.dp
+
+/** 底部磨砂的容器色透明度：过渡条与输入区用同一个值，接缝处不会有色差。 */
+private const val ChatBottomSurfaceAlpha = 0.72f
 
 private const val ChatBottomSentinelKey = "agent-chat-bottom-sentinel"
 private const val BOTTOM_FOLLOW_RESPONSE_SECONDS = 0.085f

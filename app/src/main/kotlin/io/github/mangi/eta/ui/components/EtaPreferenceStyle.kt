@@ -18,16 +18,29 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import io.github.mangi.eta.ui.app.LocalAppearanceSettings
 import top.yukonga.miuix.kmp.basic.CardColors
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 internal object EtaPreferenceColors {
-    val Blue = Color(0xFF0080FF)
+    /** 主题强调色，日间模式下用来补 Miuix 缺失的主色，不参与列表图标着色。 */
+    val Accent = Color(0xFF0080FF)
+
+    /**
+     * 列表项的装饰色。
+     *
+     * 统一收敛成中性色：一屏设置项里出现五六种高饱和色块会显得很碎，
+     * 只保留 [Green] / [Yellow] 这类有状态含义的颜色。想回退成彩色就改回具体色值。
+     */
+    val Blue: Color
+        @Composable get() = MiuixTheme.colorScheme.onSurfaceVariantActions
+
     val Green = StatusSuccess
-    val Orange = Color(0xFFFF7700)
+
+    val Orange: Color
+        @Composable get() = MiuixTheme.colorScheme.onSurfaceVariantActions
+
     val Yellow = StatusWarning
 }
 
@@ -46,7 +59,7 @@ internal fun EtaPreferenceTheme(content: @Composable () -> Unit) {
     val colors = MiuixTheme.colorScheme
     val appearance = LocalAppearanceSettings.current
     val pageColors = if (!appearance.monetEnabled && colors.background.luminance() > 0.5f) {
-        colors.copy(background = Color(0xFFF0F1F2), primary = EtaPreferenceColors.Blue)
+        colors.copy(background = Color(0xFFF0F1F2), primary = EtaPreferenceColors.Accent)
     } else {
         colors
     }
@@ -57,7 +70,7 @@ internal fun EtaPreferenceTheme(content: @Composable () -> Unit) {
 internal fun EtaPreferenceGroup(
     modifier: Modifier = Modifier.padding(horizontal = EtaPreferenceDefaults.SidePadding).padding(bottom = EtaPreferenceDefaults.GroupSpacing),
     insideMargin: PaddingValues = PaddingValues(0.dp),
-    colors: CardColors = CardDefaults.defaultColors(),
+    colors: CardColors = etaCardColors(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     EtaCard(modifier = modifier, insideMargin = insideMargin, colors = colors, content = content)
@@ -77,7 +90,7 @@ internal fun EtaPreferenceGroupTitle(text: String, modifier: Modifier = Modifier
 internal fun EtaPreferenceIcon(
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    tint: Color = MiuixTheme.colorScheme.onBackground,
+    tint: Color = MiuixTheme.colorScheme.onSurfaceVariantActions,
     enabled: Boolean = true,
 ) {
     // 满幅轮廓稍作光学校正，但所有图标都占相同宽度，保证正文和分割线对齐。

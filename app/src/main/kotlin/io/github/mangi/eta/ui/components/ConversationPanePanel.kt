@@ -123,7 +123,8 @@ private object ConversationPanelMetrics {
 @Composable
 internal fun conversationPaneContainerColor(): Color {
     val colors = MiuixTheme.colorScheme
-    return if (colors.background.luminance() > 0.5f) colors.surface else colors.surfaceContainer
+    val container = if (colors.background.luminance() > 0.5f) colors.surface else colors.surfaceContainer
+    return etaTranslucent(container)
 }
 
 @Composable

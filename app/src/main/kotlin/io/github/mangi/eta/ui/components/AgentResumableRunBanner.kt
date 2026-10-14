@@ -32,7 +32,7 @@ internal fun AgentResumableRunBanner(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .background(MiuixTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(14.dp))
+            .background(etaTranslucent(MiuixTheme.colorScheme.surfaceContainerHigh), RoundedCornerShape(14.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
