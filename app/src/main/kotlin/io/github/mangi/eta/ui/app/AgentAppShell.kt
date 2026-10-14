@@ -109,6 +109,8 @@ fun AgentAppShell(
     val pageContent: @Composable () -> Unit = {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            // 设置了自定义背景图时让容器透明，底图才不会被 Scaffold 默认的 surface 色盖住。
+            containerColor = pageContainerColor(),
             contentWindowInsets = WindowInsets.safeDrawing.only(
                 WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
             ),

@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.github.mangi.eta.ui.app.pageContainerColor
 import io.github.mangi.eta.ui.layout.WidePageContent
 import io.github.mangi.eta.ui.layout.horizontalCutoutPadding
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -44,6 +45,8 @@ fun MiuixScaffoldPage(
 
         Scaffold(
             modifier = modifier.fillMaxSize(),
+            // 设置了自定义背景图时让容器透明，底图才不会被 Scaffold 默认的 surface 色盖住。
+            containerColor = pageContainerColor(),
             topBar = {
                 TopBarBackdrop(backdrop) {
                     AdaptiveTopAppBar(
@@ -106,6 +109,8 @@ fun MiuixScaffold(
 
         Scaffold(
             modifier = modifier.fillMaxSize(),
+            // 设置了自定义背景图时让容器透明，底图才不会被 Scaffold 默认的 surface 色盖住。
+            containerColor = pageContainerColor(),
             topBar = {
                 TopBarBackdrop(backdrop) {
                     AdaptiveTopAppBar(

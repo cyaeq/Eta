@@ -65,15 +65,8 @@ fun AgentAppTheme(
         )
     }
     val colors = controller.currentColors()
-    val hasBackgroundImage = appearance.hasBackgroundImage
-    val themedColors = remember(
-        colors,
-        isDark,
-        appearance.monetEnabled,
-        appearance.pureBlackEnabled,
-        hasBackgroundImage,
-    ) {
-        val base = if (appearance.monetEnabled && appearance.pureBlackEnabled && isDark) {
+    val themedColors = remember(colors, isDark, appearance.monetEnabled, appearance.pureBlackEnabled) {
+        if (appearance.monetEnabled && appearance.pureBlackEnabled && isDark) {
             colors.copy(
                 background = Color.Black,
                 surface = Color.Black,
@@ -81,8 +74,6 @@ fun AgentAppTheme(
         } else {
             colors
         }
-        // 自定义背景图铺在内容之下，主题背景色必须让位为透明，否则会把底图整个盖住。
-        if (hasBackgroundImage) base.copy(background = Color.Transparent) else base
     }
 
     LaunchedEffect(isDark) { onResolvedDarkModeChange(isDark) }

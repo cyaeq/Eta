@@ -53,6 +53,7 @@ import io.github.mangi.eta.ui.model.ConversationSummaryUi
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import io.github.mangi.eta.ui.app.LocalAppearanceSettings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 private object ConversationPaneMetrics {
@@ -263,7 +264,11 @@ fun ConversationSidePaneScaffold(
                                 val progress = conversationPaneMotion(paneDragState.offset, paneWidthPx).progress
                                 drawRect(Color.Black, alpha = ConversationPaneMetrics.ChatScrimAlpha * progress)
                             }
-                            .background(MiuixTheme.colorScheme.background),
+                            // 设了自定义背景图时不要铺底色，否则聊天区会把底图整块盖住。
+                            .then(
+                                if (LocalAppearanceSettings.current.hasBackgroundImage) Modifier
+                                else Modifier.background(MiuixTheme.colorScheme.background),
+                            ),
                     ) {
                         Box(
                             modifier = Modifier
