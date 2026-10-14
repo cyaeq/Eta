@@ -1,5 +1,8 @@
 package io.github.mangi.eta.ui
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -18,6 +21,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -27,7 +31,10 @@ import io.github.mangi.eta.data.model.AppearancePaletteStyle
 import io.github.mangi.eta.data.model.AppearanceSettings
 import io.github.mangi.eta.data.model.AppearanceThemeMode
 import io.github.mangi.eta.data.model.AppearanceTopBarBlurStyle
+import io.github.mangi.eta.data.model.DEFAULT_BACKGROUND_DIM
+import io.github.mangi.eta.data.model.MAX_BACKGROUND_DIM
 import io.github.mangi.eta.data.model.MAX_INTERFACE_SCALE
+import io.github.mangi.eta.data.model.MIN_BACKGROUND_DIM
 import io.github.mangi.eta.data.model.MIN_INTERFACE_SCALE
 import io.github.mangi.eta.data.model.normalizeInterfaceScale
 import io.github.mangi.eta.data.repository.AppearanceSettingsRepository
@@ -35,6 +42,7 @@ import io.github.mangi.eta.ui.app.LocalAppearanceSettings
 import io.github.mangi.eta.ui.components.EtaArrowPreference
 import io.github.mangi.eta.ui.components.EtaCard
 import io.github.mangi.eta.ui.components.EtaOverlayDropdownPreference
+import io.github.mangi.eta.ui.components.EtaPreference
 import io.github.mangi.eta.ui.components.EtaPreferenceDivider
 import io.github.mangi.eta.ui.components.EtaPreferenceGroup
 import io.github.mangi.eta.ui.components.EtaPreferenceGroupTitle
@@ -61,6 +69,24 @@ internal fun AppearanceSettingsScreen(onBack: () -> Unit) {
     var showScaleDialog by remember { mutableStateOf(false) }
     var scaleInput by remember { mutableStateOf("") }
     val blurSupported = isRuntimeShaderSupported()
+    val context = LocalContext.current
+    var backgroundDimDraft by remember(appearance.backgroundDim) {
+        mutableFloatStateOf(appearance.backgroundDim)
+    }
+    // 用 OpenDocument 而不是照片选择器：只有它支持把读权限持久化到重启之后。
+    val backgroundImagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            update { current -> current.copy(backgroundImageUri = uri.toString()) }
+        }
+    }
 
     fun update(transform: (AppearanceSettings) -> AppearanceSettings) {
         coroutineScope.launch {
@@ -180,6 +206,75 @@ internal fun AppearanceSettingsScreen(onBack: () -> Unit) {
                             checked = appearance.pureBlackEnabled,
                             onCheckedChange = { enabled ->
                                 update { current -> current.copy(pureBlackEnabled = enabled) }
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        item(key = "appearance_background_title") {
+            EtaPreferenceGroupTitle(text = stringResource(R.string.appearance_group_background))
+        }
+        item(key = "appearance_background_card") {
+            EtaPreferenceGroup(modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+                EtaArrowPreference(
+                    title = stringResource(R.string.appearance_background_image),
+                    summary = if (appearance.hasBackgroundImage) {
+                        stringResource(R.string.appearance_background_image_set)
+                    } else {
+                        stringResource(R.string.appearance_background_image_summary)
+                    },
+                    onClick = { backgroundImagePicker.launch(arrayOf("image/*")) },
+                )
+                AnimatedVisibility(
+                    visible = appearance.hasBackgroundImage,
+                    enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+                    exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+                ) {
+                    Column {
+                        EtaPreferenceDivider(hasLeading = false)
+                        EtaPreference(
+                            title = stringResource(R.string.appearance_background_dim),
+                            summary = stringResource(R.string.appearance_background_dim_summary),
+                            endActions = {
+                                Text(
+                                    text = "${(backgroundDimDraft * 100).roundToInt()}%",
+                                    fontSize = MiuixTheme.textStyles.body2.fontSize,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                )
+                            },
+                            bottomAction = {
+                                Slider(
+                                    value = backgroundDimDraft.coerceIn(
+                                        MIN_BACKGROUND_DIM,
+                                        MAX_BACKGROUND_DIM,
+                                    ),
+                                    onValueChange = { backgroundDimDraft = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    valueRange = MIN_BACKGROUND_DIM..MAX_BACKGROUND_DIM,
+                                    onValueChangeFinished = {
+                                        val dim = backgroundDimDraft.coerceIn(
+                                            MIN_BACKGROUND_DIM,
+                                            MAX_BACKGROUND_DIM,
+                                        )
+                                        backgroundDimDraft = dim
+                                        update { current -> current.copy(backgroundDim = dim) }
+                                    },
+                                    keyPoints = listOf(0f, 0.2f, 0.35f, 0.5f, 0.8f),
+                                    magnetThreshold = 0.01f,
+                                    showKeyPoints = true,
+                                    hapticEffect = SliderDefaults.SliderHapticEffect.Step,
+                                )
+                            },
+                        )
+                        EtaPreferenceDivider(hasLeading = false)
+                        EtaArrowPreference(
+                            title = stringResource(R.string.appearance_background_clear),
+                            summary = stringResource(R.string.appearance_background_clear_summary),
+                            onClick = {
+                                backgroundDimDraft = DEFAULT_BACKGROUND_DIM
+                                update { current -> current.copy(backgroundImageUri = "") }
                             },
                         )
                     }

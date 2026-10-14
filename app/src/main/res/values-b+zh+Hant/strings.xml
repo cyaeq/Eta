@@ -123,6 +123,14 @@
   <string name="appearance_title">外觀與主題</string>
   <string name="appearance_group_color">顏色與主題</string>
   <string name="appearance_group_interface">介面與效果</string>
+  <string name="appearance_group_background">背景</string>
+  <string name="appearance_background_image">自訂背景圖</string>
+  <string name="appearance_background_image_summary">從檔案中選擇一張圖片作為應用背景</string>
+  <string name="appearance_background_image_set">已設定，點擊更換</string>
+  <string name="appearance_background_dim">背景暗化</string>
+  <string name="appearance_background_dim_summary">壓暗背景，保證前景文字可讀</string>
+  <string name="appearance_background_clear">清除背景圖</string>
+  <string name="appearance_background_clear_summary">恢復為主題純色背景</string>
   <string name="appearance_theme_mode">主題模式</string>
   <string name="appearance_theme_system">跟隨系統</string>
   <string name="appearance_theme_light">淺色</string>
