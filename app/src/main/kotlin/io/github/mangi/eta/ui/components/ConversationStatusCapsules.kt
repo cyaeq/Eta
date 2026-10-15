@@ -41,6 +41,9 @@ internal fun ConversationStatusCapsules(
     /** 行首槽位，用来放快捷图标；不传就是空。 */
     leading: (@Composable RowScope.() -> Unit)? = null,
 ) {
+    // 顶栏这一枚只报占用比例：363dp 宽的屏上，带上绝对值（146.3K/1M）会和快捷图标一起把整行撑满，
+    // 百分比已经足够表达"还剩多少上下文"。绝对值与压缩轮次仍在无障碍描述里，读屏不丢信息。
+    // 输入栏左侧那枚（AgentContextUsageCapsule）不受影响，仍显示完整数字。
     val usage = latestContextUsage(messages, model).let { it.copy(contextTokens = lastUsage?.contextTokens ?: it.contextTokens) }
     val count = usage.contextTokens?.let { formatCompactTokenCount(it) } ?: "—"
     val limit = usage.contextWindow?.takeIf { it > 0 }?.let { formatCompactTokenCount(it) }
@@ -52,8 +55,9 @@ internal fun ConversationStatusCapsules(
     val compactionText = compaction?.let { (rounds, max) ->
         " · " + stringResource(R.string.conversation_compaction_round_capsule, rounds, max)
     } ?: ""
-    val contextText = count + (limit?.let { "/$it" } ?: "") + (percent?.let { " · $it" } ?: "") + compactionText
-    val contextDescription = stringResource(R.string.conversation_context_capsule) + " " + contextText
+    val contextText = percent ?: "—"
+    val contextDescription = stringResource(R.string.conversation_context_capsule) + " " +
+        count + (limit?.let { "/$it" } ?: "") + (percent?.let { " · $it" } ?: "") + compactionText
     val speed = (lastUsage ?: messages.asReversed().filterIsInstance<AgentMessageUi>()
         .firstOrNull { it.usage != null }?.usage)?.averageTokensPerSecond
     val speedText = speed?.let {

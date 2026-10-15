@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ShortText
-import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.rounded.AddComment
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Language
@@ -334,7 +334,7 @@ private fun TopBarOverflowMenu(
     Box {
         IconButton(onClick = { onRefreshKimiWeb(); showMenu = true }) {
             Icon(
-                imageVector = Icons.Outlined.MoreHoriz,
+                imageVector = Icons.Outlined.MoreVert,
                 modifier = Modifier.size(24.dp),
                 contentDescription = stringResource(R.string.action_more),
             )
