@@ -127,7 +127,7 @@ private object ConversationPanelMetrics {
     val HeaderIconButtonSize = 40.dp
     val HeaderIconSize = 20.dp
 
-    /** 底部工具条：设置圆钮的高度。 */
+    /** 底部工具条：左侧「新建对话」主按钮与右侧设置圆钮共用的高度。 */
     val DockHeight = 48.dp
 }
 
@@ -191,7 +191,7 @@ internal fun ConversationPanePanel(
         color = conversationPaneContainerColor(),
         contentColor = MiuixTheme.colorScheme.onSurface,
     ) {
-        // 顶部标题/搜索与底部设置入口固定，中间的入口与历史列表滚动。
+        // 顶部标题/搜索与底部主按钮固定，中间的入口与历史列表滚动。
         Column(modifier = Modifier.fillMaxSize().imePadding()) {
             PaneFixedRegion {
                 Column(
@@ -223,11 +223,6 @@ internal fun ConversationPanePanel(
                                     searchActive = true
                                 }
                             },
-                        )
-                        PaneHeaderIconButton(
-                            icon = Icons.Rounded.AddComment,
-                            label = stringResource(R.string.action_new_conversation),
-                            onClick = onNewConversation,
                         )
                     }
                     if (searchActive) {
@@ -379,7 +374,10 @@ internal fun ConversationPanePanel(
                         .padding(horizontal = ConversationPanelMetrics.PaneHorizontalPadding),
                 ) {
                     Spacer(Modifier.height(ConversationPanelMetrics.DockTopGap))
-                    PaneDock(onOpenSettings = onOpenSettings)
+                    PaneDock(
+                        onNewConversation = onNewConversation,
+                        onOpenSettings = onOpenSettings,
+                    )
                     Spacer(Modifier.height(ConversationPanelMetrics.BottomInset))
                 }
             }
@@ -397,7 +395,7 @@ private fun PaneFixedRegion(content: @Composable () -> Unit) {
     }
 }
 
-/** GPT 式侧栏右上角的小圆钮：搜索、新建对话各一个。 */
+/** 侧栏右上角的小圆钮：搜索。新建对话只保留底部那枚主按钮，不再重复一枚。 */
 @Composable
 private fun PaneHeaderIconButton(
     icon: ImageVector,
@@ -470,16 +468,46 @@ private fun PaneShortcuts(
     }
 }
 
-/** 侧栏底部工具条：只留设置入口。「新建对话」顶栏已经有一枚圆钮，底部不再重复一遍。 */
+/** GPT 式底部工具条：左边「新建对话」主按钮，右边设置。 */
 @Composable
 private fun PaneDock(
+    onNewConversation: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .height(ConversationPanelMetrics.DockHeight)
+                .clip(CircleShape)
+                .background(MiuixTheme.colorScheme.primary)
+                .clickable(
+                    role = Role.Button,
+                    onClickLabel = stringResource(R.string.action_new_conversation),
+                    onClick = onNewConversation,
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.AddComment,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                stringResource(R.string.action_new_conversation),
+                style = MiuixTheme.textStyles.body1,
+                fontWeight = FontWeight.SemiBold,
+                color = MiuixTheme.colorScheme.onPrimary,
+                maxLines = 1,
+            )
+        }
         IconButton(
             onClick = onOpenSettings,
             modifier = Modifier.size(ConversationPanelMetrics.DockHeight).clip(CircleShape)
