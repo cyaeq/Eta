@@ -311,6 +311,14 @@ fun AgentAppRoot(
                         ?.let {
                             it to io.github.mangi.eta.agent.model.AgentContextPolicy.MAX_COMPACTION_ROUNDS
                         },
+                    // 快捷图标排在胶囊左边；是否显示由外观设置决定，组件自己会判断。
+                    leading = {
+                        io.github.mangi.eta.ui.components.HomeQuickActions(
+                            onOpenCategories = { pushRoute(AppRoute.ConversationCategories) },
+                            onOpenTerminal = { pushRoute(AppRoute.Terminal) },
+                            onOpenBrowser = { pushRoute(AppRoute.Browser) },
+                        )
+                    },
                 )
             },
             onBack = { popRoute() },

@@ -2,6 +2,7 @@ package io.github.mangi.eta.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -37,6 +38,8 @@ internal fun ConversationStatusCapsules(
     trimmed: Pair<Int, Int>? = null,
     downgradedProfileId: String? = null,
     compaction: Pair<Int, Int>? = null,
+    /** 行首槽位，用来放快捷图标；不传就是空。 */
+    leading: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val usage = latestContextUsage(messages, model).let { it.copy(contextTokens = lastUsage?.contextTokens ?: it.contextTokens) }
     val count = usage.contextTokens?.let { formatCompactTokenCount(it) } ?: "—"
@@ -56,8 +59,8 @@ internal fun ConversationStatusCapsules(
     val speedText = speed?.let {
         NumberFormat.getNumberInstance().apply { maximumFractionDigits = 1 }.format(it)
     } ?: "—"
-    // 独占一行（顶栏 bottomContent），整条栏宽由 Row 拿满，胶囊靠右贴。
-    // 行首用可伸缩 Spacer 占掉剩余空间，而不是 Arrangement.End：内容超宽时 Spacer 会先归零，
+    // 独占一行（顶栏 bottomContent），行首放快捷图标、其余靠右贴胶囊。
+    // 用可伸缩 Spacer 而不是 Arrangement.End：内容超宽时 Spacer 会先归零，
     // 不会像 End 那样把整组胶囊顶到屏幕外。
     Row(
         modifier = Modifier
@@ -65,6 +68,7 @@ internal fun ConversationStatusCapsules(
             .padding(start = 16.dp, end = 8.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        leading?.invoke(this)
         Spacer(Modifier.weight(1f))
         StatusCapsule(contextText, Modifier, contextDescription)
         Spacer(Modifier.width(CapsuleGap))

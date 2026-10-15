@@ -317,6 +317,24 @@ internal fun AppearanceSettingsScreen(onBack: () -> Unit) {
                 }
                 EtaPreferenceDivider(hasLeading = false)
                 EtaSwitchPreference(
+                    title = stringResource(R.string.appearance_top_bar_transparent),
+                    summary = stringResource(R.string.appearance_top_bar_transparent_summary),
+                    checked = appearance.topBarTransparent,
+                    onCheckedChange = { enabled ->
+                        update { current -> current.copy(topBarTransparent = enabled) }
+                    },
+                )
+                EtaPreferenceDivider(hasLeading = false)
+                EtaSwitchPreference(
+                    title = stringResource(R.string.appearance_quick_actions),
+                    summary = stringResource(R.string.appearance_quick_actions_summary),
+                    checked = appearance.quickActionsInStatusRow,
+                    onCheckedChange = { enabled ->
+                        update { current -> current.copy(quickActionsInStatusRow = enabled) }
+                    },
+                )
+                EtaPreferenceDivider(hasLeading = false)
+                EtaSwitchPreference(
                     title = stringResource(R.string.appearance_swipe_dismiss),
                     summary = stringResource(R.string.appearance_swipe_dismiss_summary),
                     checked = appearance.swipeDismissEnabled,

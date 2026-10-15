@@ -24,6 +24,10 @@ data class AppearanceSettings(
     val pureBlackEnabled: Boolean = false,
     val blurEnabled: Boolean = true,
     val topBarBlurStyle: AppearanceTopBarBlurStyle = AppearanceTopBarBlurStyle.GAUSSIAN,
+    /** 顶栏是否不铺任何底色（含毛玻璃），直接透出壁纸。 */
+    val topBarTransparent: Boolean = true,
+    /** 是否把虚拟屏、分类、终端、浏览器四个入口缩成小图标放进顶部胶囊行；关闭则留在 ⋯ 菜单里。 */
+    val quickActionsInStatusRow: Boolean = true,
     val swipeDismissEnabled: Boolean = true,
     val predictiveBackEnabled: Boolean = true,
     val interfaceScale: Float = DEFAULT_INTERFACE_SCALE,

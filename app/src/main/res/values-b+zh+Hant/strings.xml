@@ -1548,3 +1548,7 @@
   <string name="selection_copy_all">複製全文</string>
   <string name="selection_copy_segments_hint">點右側圖示複製整段，段內可拖選任意片段。</string>
 </resources>
+    <string name="appearance_quick_actions_summary">把虛擬螢幕、分類、終端、瀏覽器縮成小圖示放到膠囊左邊；關閉則留在「⋯」選單裡</string>
+    <string name="appearance_quick_actions">膠囊列快捷圖示</string>
+    <string name="appearance_top_bar_transparent_summary">頂欄不鋪底色也不用毛玻璃，直接透出壁紙</string>
+    <string name="appearance_top_bar_transparent">頂欄透明</string>

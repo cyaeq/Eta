@@ -1574,3 +1574,7 @@
   <string name="selection_copy_all">复制全文</string>
   <string name="selection_copy_segments_hint">点右侧图标复制整段，段内可拖选任意片段。</string>
 </resources>
+    <string name="appearance_quick_actions_summary">把虚拟屏、分类、终端、浏览器缩成小图标放到胶囊左边；关闭则留在「⋯」菜单里</string>
+    <string name="appearance_quick_actions">胶囊行快捷图标</string>
+    <string name="appearance_top_bar_transparent_summary">顶栏不铺底色也不用毛玻璃，直接透出壁纸</string>
+    <string name="appearance_top_bar_transparent">顶栏透明</string>

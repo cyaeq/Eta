@@ -1756,3 +1756,7 @@
     <string name="virtual_screen_action_normal">常规大小</string>
     <string name="virtual_screen_ready">就绪</string>
 </resources>
+    <string name="appearance_quick_actions_summary">Shrink virtual screen, categories, terminal and browser into small icons above the capsules</string>
+    <string name="appearance_quick_actions">Quick icons in the capsule row</string>
+    <string name="appearance_top_bar_transparent_summary">Do not draw any fill or blur; show the wallpaper through</string>
+    <string name="appearance_top_bar_transparent">Transparent top bar</string>

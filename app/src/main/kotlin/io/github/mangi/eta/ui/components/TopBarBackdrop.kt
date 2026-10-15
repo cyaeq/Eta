@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import io.github.mangi.eta.data.model.AppearanceTopBarBlurStyle
+import io.github.mangi.eta.ui.app.LocalAppearanceSettings
 import io.github.mangi.eta.ui.app.LocalBlurEnabled
 import io.github.mangi.eta.ui.app.LocalTopBarBlurStyle
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
@@ -22,6 +23,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 internal fun rememberTopBarBackdrop(): LayerBackdrop? {
+    // 顶栏选透明时不需要毛玻璃：连采样层都省掉，避免白跑一遍 layer 捕获。
+    if (LocalAppearanceSettings.current.topBarTransparent) return null
     if (!LocalBlurEnabled.current || !isRuntimeShaderSupported()) return null
     val surfaceColor = MiuixTheme.colorScheme.surface
     return rememberLayerBackdrop {
@@ -37,6 +40,8 @@ internal fun TopBarBackdrop(
 ) {
     val surfaceColor = MiuixTheme.colorScheme.surface
     val modifier = when {
+        // 顶栏透明：不铺底色、不做毛玻璃，直接把壁纸透出来。
+        LocalAppearanceSettings.current.topBarTransparent -> Modifier
         // 运行时不支持模糊时没有毛玻璃可依托，退化成半透明底：壁纸仍然透得出来，
         // 只是少了模糊质感。没设置背景图时 etaTranslucent 返回原色，顶栏保持不透明。
         backdrop == null -> Modifier.background(etaTranslucent(surfaceColor, TopBarFallbackSurfaceAlpha))
@@ -75,8 +80,8 @@ internal fun Modifier.captureForTopBar(backdrop: LayerBackdrop?): Modifier =
 /**
  * 顶栏容器色。
  *
- * 底色统一由 [TopBarBackdrop] 负责绘制（毛玻璃或半透明回落），这里始终返回透明，
- * 避免顶栏自己再铺一层把模糊效果盖掉。
+ * 底色统一由 [TopBarBackdrop] 负责绘制（毛玻璃、半透明回落或完全透明），这里始终返回透明，
+ * 避免顶栏自己再铺一层把效果盖掉。
  */
 @Composable
 internal fun topBarContainerColor(backdrop: LayerBackdrop?): Color = Color.Transparent

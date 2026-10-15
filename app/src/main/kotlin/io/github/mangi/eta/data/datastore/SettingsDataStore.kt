@@ -99,6 +99,10 @@ internal object SettingsDataStore {
     private val APPEARANCE_PURE_BLACK_ENABLED = booleanPreferencesKey("appearance_pure_black_enabled")
     private val APPEARANCE_BLUR_ENABLED = booleanPreferencesKey("appearance_blur_enabled")
     private val APPEARANCE_TOP_BAR_BLUR_STYLE = stringPreferencesKey("appearance_top_bar_blur_style")
+    private val APPEARANCE_TOP_BAR_TRANSPARENT =
+        booleanPreferencesKey("appearance_top_bar_transparent")
+    private val APPEARANCE_QUICK_ACTIONS_IN_STATUS_ROW =
+        booleanPreferencesKey("appearance_quick_actions_in_status_row")
     private val APPEARANCE_SWIPE_DISMISS_ENABLED =
         booleanPreferencesKey("appearance_swipe_dismiss_enabled")
     private val APPEARANCE_PREDICTIVE_BACK_ENABLED =
@@ -422,6 +426,8 @@ internal object SettingsDataStore {
             topBarBlurStyle = AppearanceTopBarBlurStyle.fromPersistedValue(
                 this[APPEARANCE_TOP_BAR_BLUR_STYLE],
             ),
+            topBarTransparent = this[APPEARANCE_TOP_BAR_TRANSPARENT] ?: true,
+            quickActionsInStatusRow = this[APPEARANCE_QUICK_ACTIONS_IN_STATUS_ROW] ?: true,
             swipeDismissEnabled = this[APPEARANCE_SWIPE_DISMISS_ENABLED] ?: true,
             predictiveBackEnabled = this[APPEARANCE_PREDICTIVE_BACK_ENABLED] ?: true,
             interfaceScale = this[APPEARANCE_INTERFACE_SCALE] ?: 1f,
@@ -438,6 +444,8 @@ internal object SettingsDataStore {
         this[APPEARANCE_PURE_BLACK_ENABLED] = settings.pureBlackEnabled
         this[APPEARANCE_BLUR_ENABLED] = settings.blurEnabled
         this[APPEARANCE_TOP_BAR_BLUR_STYLE] = settings.topBarBlurStyle.persistedValue
+        this[APPEARANCE_TOP_BAR_TRANSPARENT] = settings.topBarTransparent
+        this[APPEARANCE_QUICK_ACTIONS_IN_STATUS_ROW] = settings.quickActionsInStatusRow
         this[APPEARANCE_SWIPE_DISMISS_ENABLED] = settings.swipeDismissEnabled
         this[APPEARANCE_PREDICTIVE_BACK_ENABLED] = settings.predictiveBackEnabled
         this[APPEARANCE_INTERFACE_SCALE] = settings.interfaceScale

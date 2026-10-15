@@ -37,6 +37,7 @@ import io.github.mangi.eta.ui.components.MiuixBackButton
 import io.github.mangi.eta.ui.components.ShortcutIcon
 import io.github.mangi.eta.ui.components.openVirtualScreen
 import io.github.mangi.eta.ui.components.rememberVirtualScreenMenuEntries
+import io.github.mangi.eta.ui.components.VirtualScreenMenuEntry
 import io.github.mangi.eta.ui.components.TopBarBackdrop
 import io.github.mangi.eta.ui.components.captureForTopBar
 import io.github.mangi.eta.ui.components.rememberTopBarBackdrop
@@ -217,6 +218,15 @@ private fun AgentTopBar(
     profileAction: (@Composable () -> Unit)?,
 ) {
     val isHome = route is AppRoute.Home
+    // 快捷入口默认摆在胶囊行左侧，此时「⋯」里只剩收藏应用与停止 Kimi Web；
+    // 两样都没有的话菜单是空的，索性连「⋯」按钮一起收起来。
+    val quickActionsInRow = LocalAppearanceSettings.current.quickActionsInStatusRow
+    val virtualEntries = rememberVirtualScreenMenuEntries()
+    val favoriteEntries = virtualEntries.drop(1)
+    val overflowEntries = if (quickActionsInRow) favoriteEntries else virtualEntries
+    val showOverflowMenu = !quickActionsInRow ||
+        overflowEntries.isNotEmpty() ||
+        canStopKimiWeb
     val navigationIcon: @Composable () -> Unit = {
         if (isHome) {
             IconButton(onClick = onOpenConversationPane) {
@@ -232,8 +242,8 @@ private fun AgentTopBar(
     }
     val actions: @Composable RowScope.() -> Unit = {
         if (isHome) {
-            // 顶栏这一排：工具档入口、新建对话、溢出菜单。
-            // 状态胶囊组不再挤在这里：手机宽度装不下「导航图标 + 三枚胶囊 + 两个按钮」，
+            // 顶栏这一排：工具档、新建对话、（必要时）溢出菜单。
+            // 状态胶囊组不在这里：手机宽度装不下「导航图标 + 三枚胶囊 + 两个按钮」，
             // 胶囊组会向左溢出盖住导航图标（token 破 100K 后文字变长时尤其明显）。
             profileAction?.invoke()
             IconButton(onClick = onNewConversation) {
@@ -243,17 +253,21 @@ private fun AgentTopBar(
                     modifier = Modifier.size(TopBarMenuIconSize),
                 )
             }
-            TopBarOverflowMenu(
-                onOpenCategories = onOpenCategories,
-                onNewConversation = onNewConversation,
-                onOpenTerminal = onOpenTerminal,
-                onLaunchKimiWeb = onLaunchKimiWeb,
-                kimiWebLabel = kimiWebLabel,
-                canStopKimiWeb = canStopKimiWeb,
-                onStopKimiWeb = onStopKimiWeb,
-                onRefreshKimiWeb = onRefreshKimiWeb,
-                onOpenBrowser = onOpenBrowser,
-            )
+            if (showOverflowMenu) {
+                TopBarOverflowMenu(
+                    entries = overflowEntries,
+                    includeFixedActions = !quickActionsInRow,
+                    onOpenCategories = onOpenCategories,
+                    onNewConversation = onNewConversation,
+                    onOpenTerminal = onOpenTerminal,
+                    onLaunchKimiWeb = onLaunchKimiWeb,
+                    kimiWebLabel = kimiWebLabel,
+                    canStopKimiWeb = canStopKimiWeb,
+                    onStopKimiWeb = onStopKimiWeb,
+                    onRefreshKimiWeb = onRefreshKimiWeb,
+                    onOpenBrowser = onOpenBrowser,
+                )
+            }
         }
     }
     // 状态胶囊单独占一行（bottomContent），拿满整条栏宽，不会再和导航图标、右侧按钮抢位置。
@@ -304,6 +318,8 @@ private val HomeTitlePadding = 8.dp
  */
 @Composable
 private fun TopBarOverflowMenu(
+    entries: List<VirtualScreenMenuEntry>,
+    includeFixedActions: Boolean,
     onOpenCategories: () -> Unit,
     onNewConversation: () -> Unit,
     onOpenTerminal: () -> Unit,
@@ -330,14 +346,14 @@ private fun TopBarOverflowMenu(
         ) {
             val context = LocalContext.current
             val scope = rememberCoroutineScope()
-            val virtualEntries = rememberVirtualScreenMenuEntries()
             val categoriesText = stringResource(R.string.sidebar_categories)
             val openTerminalText = stringResource(R.string.action_open_terminal)
             val stopKimiWebText = stringResource(R.string.capability_kimi_stop)
             val openBrowserText = stringResource(R.string.action_open_browser)
-            // 虚拟屏入口与收藏应用平铺在菜单最上方：点开菜单就能直达，不再有二级页面。
+            // 收藏应用平铺在菜单最上方：点开菜单就能直达，不再有二级页面。
+            // 快捷入口搬到胶囊行之后，这里只剩收藏应用，分类/终端/浏览器不再重复列出。
             val menuItems: List<DropdownItem> = buildList {
-                virtualEntries.forEach { entry ->
+                entries.forEach { entry ->
                     add(
                         DropdownItem(
                             text = entry.label,
@@ -356,42 +372,44 @@ private fun TopBarOverflowMenu(
                         ),
                     )
                 }
-                add(
-                    DropdownItem(
-                        text = categoriesText,
-                        icon = { modifier ->
-                            Icon(
-                                imageVector = Icons.Rounded.Folder,
-                                contentDescription = null,
-                                modifier = modifier.size(TopBarMenuIconSize),
-                            )
-                        },
-                    ),
-                )
-                add(
-                    DropdownItem(
-                        text = openTerminalText,
-                        icon = { modifier ->
-                            Icon(
-                                imageVector = Icons.Rounded.Terminal,
-                                contentDescription = null,
-                                modifier = modifier.size(TopBarMenuIconSize),
-                            )
-                        },
-                    ),
-                )
-                add(
-                    DropdownItem(
-                        text = openBrowserText,
-                        icon = { modifier ->
-                            Icon(
-                                imageVector = Icons.Rounded.Language,
-                                contentDescription = null,
-                                modifier = modifier.size(TopBarMenuIconSize),
-                            )
-                        },
-                    ),
-                )
+                if (includeFixedActions) {
+                    add(
+                        DropdownItem(
+                            text = categoriesText,
+                            icon = { modifier ->
+                                Icon(
+                                    imageVector = Icons.Rounded.Folder,
+                                    contentDescription = null,
+                                    modifier = modifier.size(TopBarMenuIconSize),
+                                )
+                            },
+                        ),
+                    )
+                    add(
+                        DropdownItem(
+                            text = openTerminalText,
+                            icon = { modifier ->
+                                Icon(
+                                    imageVector = Icons.Rounded.Terminal,
+                                    contentDescription = null,
+                                    modifier = modifier.size(TopBarMenuIconSize),
+                                )
+                            },
+                        ),
+                    )
+                    add(
+                        DropdownItem(
+                            text = openBrowserText,
+                            icon = { modifier ->
+                                Icon(
+                                    imageVector = Icons.Rounded.Language,
+                                    contentDescription = null,
+                                    modifier = modifier.size(TopBarMenuIconSize),
+                                )
+                            },
+                        ),
+                    )
+                }
                 if (canStopKimiWeb) {
                     add(DropdownItem(text = stopKimiWebText))
                 }
@@ -405,12 +423,13 @@ private fun TopBarOverflowMenu(
                         index = index,
                         onSelectedIndexChange = {
                             showMenu = false
-                            val entry = virtualEntries.getOrNull(index)
+                            val base = entries.size
                             when {
-                                entry != null -> openVirtualScreen(context, scope, entry.component)
-                                index == virtualEntries.size -> onOpenCategories()
-                                index == virtualEntries.size + 1 -> onOpenTerminal()
-                                index == virtualEntries.size + 2 -> onOpenBrowser()
+                                index < base -> openVirtualScreen(context, scope, entries[index].component)
+                                !includeFixedActions -> onStopKimiWeb()
+                                index == base -> onOpenCategories()
+                                index == base + 1 -> onOpenTerminal()
+                                index == base + 2 -> onOpenBrowser()
                                 else -> onStopKimiWeb()
                             }
                         },
