@@ -43,7 +43,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * 会话分类管理：新建、重命名、删除（只解散归属）与排序。
- * 分类行可展开查看其下的会话（点会话直接打开）；顶部可搜索会话，命中项会在列表上方集中列出。
+ * 分类行可展开查看其下的会话（点会话直接打开）；分类列表之后可搜索会话，命中项在下方集中列出。
  */
 @Composable
 internal fun ConversationCategoriesScreen(
@@ -349,7 +349,6 @@ internal fun ConversationCategoriesScreen(
                     ConversationLine(conversation, onClick = { onOpenConversation(conversation.id) })
                 }
             }
-        }
         }
     }
 }
