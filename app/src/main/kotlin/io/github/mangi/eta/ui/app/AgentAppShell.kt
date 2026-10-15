@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ShortText
 import androidx.compose.material.icons.outlined.MoreHoriz
@@ -267,9 +269,8 @@ private fun AgentTopBar(
             }
         }
     }
-    // 状态行：左端放快捷图标（由 conversationStatus 注入），右端放两枚状态胶囊
-    // （trailingCapsules）。中间的 weight Box 吃掉余量，把右侧这一簇顶到行尾，
-    // 胶囊因此右对齐到行尾 8dp；溢出菜单排在胶囊左侧，不抢行尾位置。
+    // 状态行（首页）：左端快捷图标——[🖥][📁][⌨][🌐]，右端依次是溢出菜单「⋯」与两枚状态胶囊
+    // [百分比][内存]，胶囊贴行尾 8dp。中间的 weight Box 吃掉余量，把右侧这一簇整体顶到右边。
     val statusRow: @Composable () -> Unit = {
         if (isHome) {
             Row(
@@ -279,7 +280,6 @@ private fun AgentTopBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(modifier = Modifier.weight(1f)) { conversationStatus?.invoke() }
-                trailingCapsules?.invoke()
                 if (showOverflowMenu) {
                     TopBarOverflowMenu(
                         entries = overflowEntries,
@@ -295,6 +295,9 @@ private fun AgentTopBar(
                         onOpenBrowser = onOpenBrowser,
                     )
                 }
+                // 菜单在胶囊左侧、胶囊收在行尾，所以这里补半枚「⋯」按钮与胶囊之间的呼吸。
+                Spacer(Modifier.width(StatusRowTrailingGap))
+                trailingCapsules?.invoke()
             }
         }
     }
@@ -330,6 +333,9 @@ private val TopBarMenuIconSize = 20.dp
 
 /** 状态行右侧溢出菜单按钮的触摸区。比顶栏默认的 48dp 小，免得把整行撑高。 */
 private val StatusRowMenuSize = 36.dp
+
+/** 「⋯」按钮与行尾状态胶囊之间的间距：让菜单和胶囊看得出是两组，又不至于把胶囊推离行尾太远。 */
+private val StatusRowTrailingGap = 4.dp
 
 /**
  * 首页标题的横向内边距。
