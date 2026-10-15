@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import io.github.mangi.eta.R
 import io.github.mangi.eta.ui.components.AdaptiveTopAppBar
 import io.github.mangi.eta.ui.components.ConversationSidePaneScaffold
+import io.github.mangi.eta.ui.components.EtaTopBarTitleStyle
 import io.github.mangi.eta.ui.components.MiuixBackButton
 import io.github.mangi.eta.ui.components.ShortcutIcon
 import io.github.mangi.eta.ui.components.openVirtualScreen
@@ -316,20 +317,22 @@ private fun AgentTopBar(
 
     if (isHome) {
         // 首页聊天舞台保持紧凑；标题处显示当前会话标题。二级内容页统一使用可折叠大标题。
-        SmallTopAppBar(
-            title = homeTitle,
-            color = color,
-            scrollBehavior = scrollBehavior,
-            navigationIcon = navigationIcon,
-            actions = actions,
-            bottomContent = statusRow,
-            // 首页标题靠左显示（不再是居中大标题），26dp 的默认内边距纯属浪费；
-            // 这台机器只有 363dp 宽，省下来的横向空间全部让给会话标题。
-            titlePadding = HomeTitlePadding,
-            // miuix 的 actions 行本身是 Arrangement.End（靠右），右边原来有 16dp 默认留白，
-            // 收到 6dp：工具档、＋、⋯ 一起往右贴，行尾也不空。
-            actionIconPadding = 6.dp,
-        )
+        EtaTopBarTitleStyle {
+            SmallTopAppBar(
+                title = homeTitle,
+                color = color,
+                scrollBehavior = scrollBehavior,
+                navigationIcon = navigationIcon,
+                actions = actions,
+                bottomContent = statusRow,
+                // 首页标题靠左显示（不再是居中大标题），26dp 的默认内边距纯属浪费；
+                // 这台机器只有 363dp 宽，省下来的横向空间全部让给会话标题。
+                titlePadding = HomeTitlePadding,
+                // miuix 的 actions 行本身是 Arrangement.End（靠右），右边原来有 16dp 默认留白，
+                // 收到 6dp：工具档、＋、⋯ 一起往右贴，行尾也不空。
+                actionIconPadding = 6.dp,
+            )
+        }
     } else {
         AdaptiveTopAppBar(
             title = titleForRoute(route),
