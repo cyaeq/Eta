@@ -65,17 +65,18 @@ internal fun ConversationStatusCapsules(
     val speedText = speed?.let {
         NumberFormat.getNumberInstance().apply { maximumFractionDigits = 1 }.format(it)
     } ?: "—"
-    // 独占一行（顶栏 bottomContent），行首放快捷图标、其余靠右贴胶囊。
-    // 用可伸缩 Spacer 而不是 Arrangement.End：内容超宽时 Spacer 会先归零，
-    // 不会像 End 那样把整组胶囊顶到屏幕外。
+    // 独占一行（顶栏 bottomContent），快捷图标与两枚胶囊左对齐；
+    // 行尾余量留给外层的溢出菜单——它与本组件同处一个 Row，靠 weight 把菜单顶到最右。
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 16.dp, end = 8.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        leading?.invoke(this)
-        Spacer(Modifier.weight(1f))
+        if (leading != null) {
+            leading.invoke(this)
+            Spacer(Modifier.width(CapsuleGap))
+        }
         StatusCapsule(contextText, Modifier, contextDescription)
         Spacer(Modifier.width(CapsuleGap))
         MemoryUsageCapsule()

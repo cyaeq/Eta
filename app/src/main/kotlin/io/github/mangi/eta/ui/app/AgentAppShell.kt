@@ -2,10 +2,12 @@ package io.github.mangi.eta.ui.app
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -23,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -242,7 +245,7 @@ private fun AgentTopBar(
     }
     val actions: @Composable RowScope.() -> Unit = {
         if (isHome) {
-            // 顶栏这一排：工具档、新建对话、（必要时）溢出菜单。
+            // 顶栏这一排：工具档、新建对话。
             // 状态胶囊组不在这里：手机宽度装不下「导航图标 + 三枚胶囊 + 两个按钮」，
             // 胶囊组会向左溢出盖住导航图标（token 破 100K 后文字变长时尤其明显）。
             profileAction?.invoke()
@@ -253,26 +256,34 @@ private fun AgentTopBar(
                     modifier = Modifier.size(TopBarMenuIconSize),
                 )
             }
-            if (showOverflowMenu) {
-                TopBarOverflowMenu(
-                    entries = overflowEntries,
-                    includeFixedActions = !quickActionsInRow,
-                    onOpenCategories = onOpenCategories,
-                    onNewConversation = onNewConversation,
-                    onOpenTerminal = onOpenTerminal,
-                    onLaunchKimiWeb = onLaunchKimiWeb,
-                    kimiWebLabel = kimiWebLabel,
-                    canStopKimiWeb = canStopKimiWeb,
-                    onStopKimiWeb = onStopKimiWeb,
-                    onRefreshKimiWeb = onRefreshKimiWeb,
-                    onOpenBrowser = onOpenBrowser,
-                )
-            }
         }
     }
-    // 状态胶囊单独占一行（bottomContent），拿满整条栏宽，不会再和导航图标、右侧按钮抢位置。
+    // 状态行：快捷图标与两枚胶囊左对齐，溢出菜单右对齐。
+    // 溢出菜单从顶栏挪下来，顶栏右侧只剩工具档与新建对话，窄屏上不再挤。
     val statusRow: @Composable () -> Unit = {
-        if (isHome) conversationStatus?.invoke()
+        if (isHome) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(modifier = Modifier.weight(1f)) { conversationStatus?.invoke() }
+                if (showOverflowMenu) {
+                    TopBarOverflowMenu(
+                        entries = overflowEntries,
+                        includeFixedActions = !quickActionsInRow,
+                        onOpenCategories = onOpenCategories,
+                        onNewConversation = onNewConversation,
+                        onOpenTerminal = onOpenTerminal,
+                        onLaunchKimiWeb = onLaunchKimiWeb,
+                        kimiWebLabel = kimiWebLabel,
+                        canStopKimiWeb = canStopKimiWeb,
+                        onStopKimiWeb = onStopKimiWeb,
+                        onRefreshKimiWeb = onRefreshKimiWeb,
+                        onOpenBrowser = onOpenBrowser,
+                    )
+                }
+            }
+        }
     }
 
     if (isHome) {
@@ -304,6 +315,9 @@ private fun AgentTopBar(
 
 private val TopBarMenuIconSize = 20.dp
 
+/** 状态行右侧溢出菜单按钮的触摸区。比顶栏默认的 48dp 小，免得把整行撑高。 */
+private val StatusRowMenuSize = 36.dp
+
 /**
  * 首页标题的横向内边距。
  *
@@ -332,10 +346,14 @@ private fun TopBarOverflowMenu(
 ) {
     var showMenu by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { onRefreshKimiWeb(); showMenu = true }) {
+        IconButton(
+            onClick = { onRefreshKimiWeb(); showMenu = true },
+            minWidth = StatusRowMenuSize,
+            minHeight = StatusRowMenuSize,
+        ) {
             Icon(
-                imageVector = Icons.Outlined.MoreVert,
-                modifier = Modifier.size(24.dp),
+                imageVector = Icons.Outlined.MoreHoriz,
+                modifier = Modifier.size(TopBarMenuIconSize),
                 contentDescription = stringResource(R.string.action_more),
             )
         }
