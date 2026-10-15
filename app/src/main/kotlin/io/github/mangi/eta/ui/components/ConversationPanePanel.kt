@@ -30,7 +30,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AddComment
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.TheaterComedy
+import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,15 +50,15 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -73,7 +84,6 @@ import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.ListPopupDefaults
 import top.yukonga.miuix.kmp.basic.PopupPositionProvider
-import top.yukonga.miuix.kmp.basic.SearchBar
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -112,6 +122,13 @@ private object ConversationPanelMetrics {
     val ActiveDotGap = 10.dp
     val EmptyVerticalPadding = 28.dp
     val DockTopGap = 8.dp
+
+    /** 顶部搜索与新建两个圆钮的外框、图标尺寸。 */
+    val HeaderIconButtonSize = 40.dp
+    val HeaderIconSize = 20.dp
+
+    /** 底部工具条：左侧「新建对话」主按钮与右侧设置圆钮共用的高度。 */
+    val DockHeight = 48.dp
 }
 
 /**
@@ -163,6 +180,8 @@ internal fun ConversationPanePanel(
     var collapsedSections by rememberSaveable(
         stateSaver = listSaver<Set<String>, String>(save = { it.toList() }, restore = { it.toSet() }),
     ) { mutableStateOf(emptySet<String>()) }
+    // GPT 式顶栏：搜索平时收成一个图标，点开才铺出输入框；收起时把筛选条件一起清掉。
+    var searchActive by rememberSaveable { mutableStateOf(false) }
     val capabilities = rememberDeviceCapabilities()
     val groups = remember(state.conversations, state.categories) { state.conversations.groupForDrawer(state.categories) }
 
@@ -173,7 +192,7 @@ internal fun ConversationPanePanel(
         color = conversationPaneContainerColor(),
         contentColor = MiuixTheme.colorScheme.onSurface,
     ) {
-        // 顶部品牌与底部搜索固定，历史列表在中间滚动。
+        // 顶部标题/搜索与底部主按钮固定，中间的入口与历史列表滚动。
         Column(modifier = Modifier.fillMaxSize().imePadding()) {
             PaneFixedRegion {
                 Column(
@@ -184,32 +203,49 @@ internal fun ConversationPanePanel(
                         .padding(horizontal = ConversationPanelMetrics.PaneHorizontalPadding),
                 ) {
                     Spacer(Modifier.height(ConversationPanelMetrics.TopInset))
-                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, tint = Color.Unspecified,
-                            modifier = Modifier.size(40.dp).clip(CircleShape)
-                                .background(MiuixTheme.colorScheme.surfaceContainerHighest).padding(4.dp))
-                        Row(
-                            modifier = Modifier.weight(1f).padding(start = 10.dp, end = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(
-                                stringResource(R.string.app_name),
-                                style = MiuixTheme.textStyles.headline2,
-                                fontWeight = FontWeight.Bold,
-                                color = MiuixTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                            )
-                            PaneModeBadges(
-                                rootGranted = capabilities.root.isGranted,
-                                accessibilityAvailable = capabilities.accessibilityAvailable,
-                                onOpenRootSettings = onOpenRootSettings,
-                                onOpenAccessibilitySettings = onOpenAccessibilitySettings,
-                                onOpenSettings = onOpenSettings,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.app_name),
+                            style = MiuixTheme.textStyles.headline2,
+                            fontWeight = FontWeight.Bold,
+                            color = MiuixTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f).padding(start = 4.dp),
+                        )
+                        PaneHeaderIconButton(
+                            icon = Icons.Rounded.Search,
+                            label = stringResource(R.string.conversation_search_hint),
+                            active = searchActive,
+                            onClick = {
+                                if (searchActive) {
+                                    searchActive = false
+                                    onSearchChange("")
+                                } else {
+                                    searchActive = true
+                                }
+                            },
+                        )
+                        PaneHeaderIconButton(
+                            icon = Icons.Rounded.AddComment,
+                            label = stringResource(R.string.action_new_conversation),
+                            onClick = onNewConversation,
+                        )
                     }
+                    if (searchActive) {
+                        PaneSearchField(
+                            query = state.searchQuery,
+                            onSearchChange = onSearchChange,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                    PaneModeBadges(
+                        rootGranted = capabilities.root.isGranted,
+                        accessibilityAvailable = capabilities.accessibilityAvailable,
+                        onOpenRootSettings = onOpenRootSettings,
+                        onOpenAccessibilitySettings = onOpenAccessibilitySettings,
+                        onOpenSettings = onOpenSettings,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
                     Spacer(Modifier.height(ConversationPanelMetrics.AfterActionBar))
                 }
             }
@@ -229,6 +265,20 @@ internal fun ConversationPanePanel(
                 verticalArrangement = Arrangement.spacedBy(ConversationPanelMetrics.RowGap),
                 overscrollEffect = null,
             ) {
+                // GPT 式速览：功能入口摆在列表最上面，随列表一起滚走。
+                if (query.isBlank() && !batchMode) {
+                    item(key = "pane-shortcuts") {
+                        PaneShortcuts(
+                            onOpenTools = onOpenTools,
+                            onOpenSkills = onOpenSkills,
+                            onOpenCharacters = onOpenCharacters,
+                            onOpenTasks = onOpenTasks,
+                            onOpenPermissions = onOpenPermissions,
+                            onOpenModelProviders = onOpenModelProviders,
+                            onOpenCategories = onOpenCategories,
+                        )
+                    }
+                }
                 if (query.isBlank() && !batchMode && recentOpened.isNotEmpty()) {
                     item(key = "recent-opened") {
                         RecentOpenedSection(
@@ -243,7 +293,7 @@ internal fun ConversationPanePanel(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            if (batchMode) "已选 ${selectedIds.size} 项" else stringResource(R.string.action_conversation_history),
+                            if (batchMode) "已选 ${selectedIds.size} 项" else stringResource(R.string.time_recent),
                             style = MiuixTheme.textStyles.body2,
                             fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MiuixTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f).semantics { heading() },
@@ -327,9 +377,8 @@ internal fun ConversationPanePanel(
                         .padding(horizontal = ConversationPanelMetrics.PaneHorizontalPadding),
                 ) {
                     Spacer(Modifier.height(ConversationPanelMetrics.DockTopGap))
-                    PaneSearchAndSettings(
-                        query = state.searchQuery,
-                        onSearchChange = onSearchChange,
+                    PaneDock(
+                        onNewConversation = onNewConversation,
                         onOpenSettings = onOpenSettings,
                     )
                     Spacer(Modifier.height(ConversationPanelMetrics.BottomInset))
@@ -349,10 +398,83 @@ private fun PaneFixedRegion(content: @Composable () -> Unit) {
     }
 }
 
+/** GPT 式侧栏右上角的小圆钮：搜索、新建对话各一个。 */
 @Composable
-private fun PaneSearchAndSettings(
+private fun PaneHeaderIconButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    active: Boolean = false,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .padding(start = 6.dp)
+            .size(ConversationPanelMetrics.HeaderIconButtonSize)
+            .clip(CircleShape)
+            .background(
+                if (active) MiuixTheme.colorScheme.primary.copy(alpha = 0.16f) else MiuixTheme.colorScheme.surfaceContainerHighest,
+            ),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (active) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface,
+            modifier = Modifier.size(ConversationPanelMetrics.HeaderIconSize),
+        )
+    }
+}
+
+/** 点开搜索图标后铺在标题下面的输入框；展开即聚焦，省一次点击。 */
+@Composable
+private fun PaneSearchField(
     query: String,
     onSearchChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    InputField(
+        query = query,
+        onQueryChange = onSearchChange,
+        onSearch = onSearchChange,
+        expanded = false,
+        onExpandedChange = {},
+        label = stringResource(R.string.conversation_search_hint),
+        // 深色下侧栏已抬高到 surfaceContainer，搜索框需再高一档才能显出轮廓；
+        // 浅色的 surfaceContainerHigh 与 surfaceContainerHighest 相同，观感不变。
+        color = MiuixTheme.colorScheme.surfaceContainerHighest,
+        modifier = modifier.fillMaxWidth().focusRequester(focusRequester),
+    )
+}
+
+/** 侧栏中段的功能入口：GPT 那种「图标 + 名称」竖排列表。 */
+@Composable
+private fun PaneShortcuts(
+    onOpenTools: () -> Unit,
+    onOpenSkills: () -> Unit,
+    onOpenCharacters: () -> Unit,
+    onOpenTasks: () -> Unit,
+    onOpenPermissions: () -> Unit,
+    onOpenModelProviders: () -> Unit,
+    onOpenCategories: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp)) {
+        PaneShortcut(Icons.Rounded.Build, stringResource(R.string.route_tools), onOpenTools)
+        PaneShortcut(Icons.Rounded.AutoAwesome, stringResource(R.string.route_skills), onOpenSkills)
+        // 角色页在顶栏也是硬编码文案，项目里没有对应字符串资源。
+        PaneShortcut(Icons.Rounded.TheaterComedy, "角色", onOpenCharacters)
+        PaneShortcut(Icons.Rounded.Schedule, stringResource(R.string.automation_title), onOpenTasks)
+        PaneShortcut(Icons.Rounded.VerifiedUser, stringResource(R.string.route_permissions), onOpenPermissions)
+        PaneShortcut(Icons.Rounded.Cloud, stringResource(R.string.route_model_providers), onOpenModelProviders)
+        PaneShortcut(Icons.Rounded.Folder, stringResource(R.string.sidebar_categories), onOpenCategories)
+    }
+}
+
+/** GPT 式底部工具条：左边「新建对话」主按钮，右边设置。 */
+@Composable
+private fun PaneDock(
+    onNewConversation: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     Row(
@@ -360,29 +482,38 @@ private fun PaneSearchAndSettings(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        SearchBar(
-            modifier = Modifier.weight(1f),
-            insideMargin = DpSize.Zero,
-            expanded = false,
-            onExpandedChange = {},
-            inputField = {
-                InputField(
-                    query = query,
-                    onQueryChange = onSearchChange,
-                    onSearch = onSearchChange,
-                    expanded = false,
-                    onExpandedChange = {},
-                    label = stringResource(R.string.conversation_search_hint),
-                    // 深色下侧栏已抬高到 surfaceContainer，搜索框需再高一档才能显出轮廓；
-                    // 浅色的 surfaceContainerHigh 与 surfaceContainerHighest 相同，观感不变。
-                    color = MiuixTheme.colorScheme.surfaceContainerHighest,
-                )
-            },
-            content = {},
-        )
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .height(ConversationPanelMetrics.DockHeight)
+                .clip(CircleShape)
+                .background(MiuixTheme.colorScheme.primary)
+                .clickable(
+                    role = Role.Button,
+                    onClickLabel = stringResource(R.string.action_new_conversation),
+                    onClick = onNewConversation,
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.AddComment,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                stringResource(R.string.action_new_conversation),
+                style = MiuixTheme.textStyles.body1,
+                fontWeight = FontWeight.SemiBold,
+                color = MiuixTheme.colorScheme.onPrimary,
+                maxLines = 1,
+            )
+        }
         IconButton(
             onClick = onOpenSettings,
-            modifier = Modifier.size(48.dp).clip(CircleShape)
+            modifier = Modifier.size(ConversationPanelMetrics.DockHeight).clip(CircleShape)
                 .background(MiuixTheme.colorScheme.surfaceContainerHighest),
         ) {
             Icon(MiuixIcons.Settings, contentDescription = stringResource(R.string.sidebar_settings), modifier = Modifier.size(22.dp))
@@ -761,10 +892,10 @@ private fun PaneShortcut(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
-        .clickable(onClickLabel = label, onClick = onClick).padding(horizontal = 12.dp, vertical = 12.dp),
+    Row(modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(12.dp))
+        .clickable(onClickLabel = label, onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = MiuixTheme.colorScheme.onSurface)
+        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = MiuixTheme.colorScheme.onSurface)
         Text(label, style = MiuixTheme.textStyles.body1, fontWeight = FontWeight.Medium, color = MiuixTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
