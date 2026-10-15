@@ -82,6 +82,13 @@ fun AgentAppShell(
     onDismissConversationPane: () -> Unit,
     onSearchConversations: (String) -> Unit,
     onNewConversation: () -> Unit,
+    /**
+     * 首页顶栏「新建对话」圆钮是否显示。
+     *
+     * 空白的、还没跑出过任何一轮输出的新会话下，这枚按钮没有实际去处——会话本来就是新的，
+     * 点它只是把同一个空会话重置一遍。等这次会话真的产出过输出，它才承担「另起一段」的意义。
+     */
+    showNewConversationAction: Boolean = true,
     onOpenTerminal: () -> Unit,
     onLaunchKimiWeb: () -> Unit,
     kimiWebLabel: String,
@@ -148,6 +155,7 @@ fun AgentAppShell(
                             onOpenConversationPane = onOpenConversationPane,
                             onOpenCategories = onOpenCategories,
                             onNewConversation = onNewConversation,
+                            showNewConversationAction = showNewConversationAction,
                             onOpenTerminal = onOpenTerminal,
                             onLaunchKimiWeb = onLaunchKimiWeb,
                             kimiWebLabel = kimiWebLabel,
@@ -220,6 +228,7 @@ private fun AgentTopBar(
     onOpenConversationPane: () -> Unit,
     onOpenCategories: () -> Unit,
     onNewConversation: () -> Unit,
+    showNewConversationAction: Boolean,
     onOpenTerminal: () -> Unit,
     onLaunchKimiWeb: () -> Unit,
     kimiWebLabel: String,
@@ -256,16 +265,19 @@ private fun AgentTopBar(
     }
     val actions: @Composable RowScope.() -> Unit = {
         if (isHome) {
-            // 顶栏这一排：工具档、新建对话。
+            // 顶栏这一排：工具档，以及条件显示的「新建对话」。
             // 状态胶囊组不在这里：手机宽度装不下「导航图标 + 三枚胶囊 + 两个按钮」，
             // 胶囊组会向左溢出盖住导航图标（token 破 100K 后文字变长时尤其明显）。
             profileAction?.invoke()
-            IconButton(onClick = onNewConversation) {
-                Icon(
-                    imageVector = Icons.Rounded.AddComment,
-                    contentDescription = stringResource(R.string.action_new_conversation),
-                    modifier = Modifier.size(TopBarMenuIconSize),
-                )
+            // 空白新会话（还没跑出过任何一轮输出）下收起这枚按钮：此时点它等于把同一个空会话重置一遍。
+            if (showNewConversationAction) {
+                IconButton(onClick = onNewConversation) {
+                    Icon(
+                        imageVector = Icons.Rounded.AddComment,
+                        contentDescription = stringResource(R.string.action_new_conversation),
+                        modifier = Modifier.size(TopBarMenuIconSize),
+                    )
+                }
             }
         }
     }

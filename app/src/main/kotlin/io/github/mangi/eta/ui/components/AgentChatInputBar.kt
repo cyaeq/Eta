@@ -105,6 +105,14 @@ private val ThinkingIconSize = 21.dp
 private val InputContainerShape = RoundedCornerShape(20.dp)
 
 /**
+ * 输入框自身底色的不透明度（只在设置了自定义背景图时生效，见 [etaTranslucent]）。
+ *
+ * 输入框周围已经全透明，壁纸会直接从底下透上来；沿用卡片那档 0.5 时，正文和壁纸叠在一起，
+ * 正在输入的字反而糊。这里单独给一档接近不透明的值，保住可读性，同时仍留一点壁纸的暗示。
+ */
+private const val InputSurfaceAlpha = 0.9f
+
+/**
  * Agent 输入器始终保持同一空间结构，聚焦、输入和执行过程只改变状态，不搬动操作入口。
  */
 @Composable
@@ -278,7 +286,7 @@ internal fun AgentChatInputBar(
                         ),
                     )
                     .squircleSurface(
-                        color = etaTranslucent(MiuixTheme.colorScheme.surfaceContainer),
+                        color = etaTranslucent(MiuixTheme.colorScheme.surfaceContainer, InputSurfaceAlpha),
                         cornerRadius = 20.dp,
                     )
                     .squircleBorder(

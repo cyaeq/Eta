@@ -85,6 +85,238 @@ internal fun ConversationCategoriesScreen(
         title = stringResource(R.string.conversation_categories_title),
         onBack = onBack,
     ) {
+        item(key = "list-title") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 32.dp, end = 24.dp, top = 4.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // 顶栏已经是「会话分类」，这里不再重复一遍大标题，只留一个分组小标题。
+                Text(
+                    "分类",
+                    style = MiuixTheme.textStyles.subtitle,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    stringResource(R.string.conversation_category_new),
+                    style = MiuixTheme.textStyles.subtitle,
+                    color = MiuixTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clickable { creating = !creating }
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                )
+            }
+        }
+        if (creating) {
+            item(key = "create") {
+                EtaPreferenceGroup {
+                    TextField(
+                        value = newName,
+                        onValueChange = { newName = it },
+                        label = stringResource(R.string.conversation_category_name_hint),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().focusRequester(newNameFocus),
+                    )
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                        EtaTextButton(
+                            text = stringResource(R.string.conversation_category_new),
+                            enabled = newName.isNotBlank(),
+                            onClick = {
+                                if (onCreate(newName) != null) {
+                                    newName = ""
+                                    creating = false
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        EtaTextButton(
+                            text = stringResource(R.string.conversation_category_cancel),
+                            onClick = {
+                                newName = ""
+                                creating = false
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+        }
+        if (ordered.isEmpty()) {
+            item(key = "empty") {
+                EtaPreferenceGroup {
+                    Text(
+                        stringResource(R.string.conversation_category_empty),
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            }
+        }
+        items(ordered, key = { it.id }) { category ->
+            val editing = editingId == category.id
+            val pendingDelete = pendingDeleteId == category.id
+            val index = ordered.indexOfFirst { it.id == category.id }
+            val expanded = expandedId == category.id
+            val inside = if (expanded) {
+                conversations.filter { it.categoryId == category.id }.sortedByDescending { it.updatedAtMillis }
+            } else {
+                emptyList()
+            }
+            val canUp = index > 0
+            val canDown = index in 0 until ordered.lastIndex
+            var menuOpen by remember { mutableStateOf(false) }
+            val menuOffsetY = with(LocalDensity.current) { 4.dp.roundToPx() }
+            EtaPreferenceGroup {
+                when {
+                    editing -> {
+                        TextField(
+                            value = editingName,
+                            onValueChange = { editingName = it },
+                            label = stringResource(R.string.conversation_category_name_hint),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                            EtaTextButton(
+                                text = stringResource(R.string.conversation_category_save),
+                                enabled = editingName.isNotBlank(),
+                                onClick = {
+                                    onRename(category.id, editingName)
+                                    editingId = null
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                            EtaTextButton(
+                                text = stringResource(R.string.conversation_category_cancel),
+                                onClick = { editingId = null },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+
+                    pendingDelete -> {
+                        Text(
+                            stringResource(R.string.conversation_category_delete_confirm),
+                            style = MiuixTheme.textStyles.footnote1,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                            EtaTextButton(
+                                text = stringResource(R.string.conversation_category_delete),
+                                onClick = {
+                                    onDelete(category.id)
+                                    pendingDeleteId = null
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                            EtaTextButton(
+                                text = stringResource(R.string.conversation_category_cancel),
+                                onClick = { pendingDeleteId = null },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+
+                    else -> {
+                        val toggle = {
+                            expandedId = if (expanded) null else category.id
+                        }
+                        Column(Modifier.fillMaxWidth()) {
+                            Box(Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    if (expanded) "▾" else "▸",
+                                    style = MiuixTheme.textStyles.footnote1,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    modifier = Modifier.padding(end = 4.dp).clickable(onClick = toggle),
+                                )
+                                Text(
+                                    category.name,
+                                    style = MiuixTheme.textStyles.body2,
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f).clickable(onClick = toggle),
+                                )
+                                Text(
+                                    stringResource(R.string.conversation_category_count, counts[category.id] ?: 0),
+                                    style = MiuixTheme.textStyles.footnote1,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                )
+                                // 42sp 的字面「⋯」在这行里比分类名还抢眼，回到图标尺寸。
+                                Text(
+                                    "⋯",
+                                    fontSize = 22.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    modifier = Modifier
+                                        .clickable { menuOpen = true }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                )
+                            }
+                            if (menuOpen) {
+                                Popup(
+                                    alignment = Alignment.BottomEnd,
+                                    offset = IntOffset(0, menuOffsetY),
+                                    onDismissRequest = { menuOpen = false },
+                                    properties = PopupProperties(focusable = true),
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(MiuixTheme.colorScheme.surfaceContainerHighest)
+                                            .padding(vertical = 4.dp),
+                                    ) {
+                                        Column(Modifier.width(150.dp)) {
+                                            CategoryMenuRow("上移", enabled = canUp) {
+                                                menuOpen = false
+                                                onMove(category.id, -1)
+                                            }
+                                            CategoryMenuRow("下移", enabled = canDown) {
+                                                menuOpen = false
+                                                onMove(category.id, 1)
+                                            }
+                                            CategoryMenuRow(stringResource(R.string.conversation_category_rename)) {
+                                                menuOpen = false
+                                                editingId = category.id
+                                                editingName = category.name
+                                            }
+                                            CategoryMenuRow(stringResource(R.string.conversation_category_delete), danger = true) {
+                                                menuOpen = false
+                                                pendingDeleteId = category.id
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            }
+                            if (expanded) {
+                                Column(Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp)) {
+                                    if (inside.isEmpty()) {
+                                        Text(
+                                            "这个分类下还没有会话，在会话长按菜单里可以移进来",
+                                            style = MiuixTheme.textStyles.footnote1,
+                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                            modifier = Modifier.padding(bottom = 4.dp),
+                                        )
+                                    }
+                                    inside.forEach { conversation ->
+                                        ConversationLine(
+                                            conversation = conversation,
+                                            onClick = { onOpenConversation(conversation.id) },
+                                            showCategory = false,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         item(key = "search") {
             EtaPreferenceGroup {
                 TextField(
@@ -118,237 +350,6 @@ internal fun ConversationCategoriesScreen(
                 }
             }
         }
-        if (keyword.isEmpty()) {
-            item(key = "list-title") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 32.dp, end = 24.dp, top = 4.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        stringResource(R.string.conversation_categories_title),
-                        style = MiuixTheme.textStyles.headline2,
-                        color = MiuixTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        stringResource(R.string.conversation_category_new),
-                        style = MiuixTheme.textStyles.subtitle,
-                        color = MiuixTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .clickable { creating = !creating }
-                            .padding(horizontal = 6.dp, vertical = 4.dp),
-                    )
-                }
-            }
-            if (creating) {
-                item(key = "create") {
-                    EtaPreferenceGroup {
-                        TextField(
-                            value = newName,
-                            onValueChange = { newName = it },
-                            label = stringResource(R.string.conversation_category_name_hint),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth().focusRequester(newNameFocus),
-                        )
-                        Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                            EtaTextButton(
-                                text = stringResource(R.string.conversation_category_new),
-                                enabled = newName.isNotBlank(),
-                                onClick = {
-                                    if (onCreate(newName) != null) {
-                                        newName = ""
-                                        creating = false
-                                    }
-                                },
-                                modifier = Modifier.weight(1f),
-                            )
-                            EtaTextButton(
-                                text = stringResource(R.string.conversation_category_cancel),
-                                onClick = {
-                                    newName = ""
-                                    creating = false
-                                },
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
-                }
-            }
-            if (ordered.isEmpty()) {
-                item(key = "empty") {
-                    EtaPreferenceGroup {
-                        Text(
-                            stringResource(R.string.conversation_category_empty),
-                            style = MiuixTheme.textStyles.footnote1,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            modifier = Modifier.padding(16.dp),
-                        )
-                    }
-                }
-            }
-            items(ordered, key = { it.id }) { category ->
-                val editing = editingId == category.id
-                val pendingDelete = pendingDeleteId == category.id
-                val index = ordered.indexOfFirst { it.id == category.id }
-                val expanded = expandedId == category.id
-                val inside = if (expanded) {
-                    conversations.filter { it.categoryId == category.id }.sortedByDescending { it.updatedAtMillis }
-                } else {
-                    emptyList()
-                }
-                val canUp = index > 0
-                val canDown = index in 0 until ordered.lastIndex
-                var menuOpen by remember { mutableStateOf(false) }
-                val menuOffsetY = with(LocalDensity.current) { 4.dp.roundToPx() }
-                EtaPreferenceGroup {
-                    when {
-                        editing -> {
-                            TextField(
-                                value = editingName,
-                                onValueChange = { editingName = it },
-                                label = stringResource(R.string.conversation_category_name_hint),
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                                EtaTextButton(
-                                    text = stringResource(R.string.conversation_category_save),
-                                    enabled = editingName.isNotBlank(),
-                                    onClick = {
-                                        onRename(category.id, editingName)
-                                        editingId = null
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                )
-                                EtaTextButton(
-                                    text = stringResource(R.string.conversation_category_cancel),
-                                    onClick = { editingId = null },
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                        }
-
-                        pendingDelete -> {
-                            Text(
-                                stringResource(R.string.conversation_category_delete_confirm),
-                                style = MiuixTheme.textStyles.footnote1,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            )
-                            Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                                EtaTextButton(
-                                    text = stringResource(R.string.conversation_category_delete),
-                                    onClick = {
-                                        onDelete(category.id)
-                                        pendingDeleteId = null
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                )
-                                EtaTextButton(
-                                    text = stringResource(R.string.conversation_category_cancel),
-                                    onClick = { pendingDeleteId = null },
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                        }
-
-                        else -> {
-                            val toggle = {
-                                expandedId = if (expanded) null else category.id
-                            }
-                            Column(Modifier.fillMaxWidth()) {
-                                Box(Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        if (expanded) "▾" else "▸",
-                                        style = MiuixTheme.textStyles.footnote1,
-                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                        modifier = Modifier.padding(end = 4.dp).clickable(onClick = toggle),
-                                    )
-                                    Text(
-                                        category.name,
-                                        style = MiuixTheme.textStyles.body2,
-                                        color = MiuixTheme.colorScheme.onSurface,
-                                        modifier = Modifier.weight(1f).clickable(onClick = toggle),
-                                    )
-                                    Text(
-                                        stringResource(R.string.conversation_category_count, counts[category.id] ?: 0),
-                                        style = MiuixTheme.textStyles.footnote1,
-                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                    )
-                                    Text(
-                                        "⋯",
-                                        fontSize = 42.sp,
-                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                        modifier = Modifier
-                                            .clickable { menuOpen = true }
-                                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                                    )
-                                }
-                                if (menuOpen) {
-                                    Popup(
-                                        alignment = Alignment.BottomEnd,
-                                        offset = IntOffset(0, menuOffsetY),
-                                        onDismissRequest = { menuOpen = false },
-                                        properties = PopupProperties(focusable = true),
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(MiuixTheme.colorScheme.surfaceContainerHighest)
-                                                .padding(vertical = 4.dp),
-                                        ) {
-                                            Column(Modifier.width(150.dp)) {
-                                                CategoryMenuRow("上移", enabled = canUp) {
-                                                    menuOpen = false
-                                                    onMove(category.id, -1)
-                                                }
-                                                CategoryMenuRow("下移", enabled = canDown) {
-                                                    menuOpen = false
-                                                    onMove(category.id, 1)
-                                                }
-                                                CategoryMenuRow(stringResource(R.string.conversation_category_rename)) {
-                                                    menuOpen = false
-                                                    editingId = category.id
-                                                    editingName = category.name
-                                                }
-                                                CategoryMenuRow(stringResource(R.string.conversation_category_delete), danger = true) {
-                                                    menuOpen = false
-                                                    pendingDeleteId = category.id
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                }
-                                if (expanded) {
-                                    Column(Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp)) {
-                                        if (inside.isEmpty()) {
-                                            Text(
-                                                "这个分类下还没有会话，在会话长按菜单里可以移进来",
-                                                style = MiuixTheme.textStyles.footnote1,
-                                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                                modifier = Modifier.padding(bottom = 4.dp),
-                                            )
-                                        }
-                                        inside.forEach { conversation ->
-                                            ConversationLine(
-                                                conversation = conversation,
-                                                onClick = { onOpenConversation(conversation.id) },
-                                                showCategory = false,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 }

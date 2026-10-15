@@ -333,6 +333,11 @@ fun AgentAppRoot(
             },
             onSearchConversations = { query -> agentState.updateSearchQuery(query) },
             onNewConversation = { createConversation() },
+            // 顶栏那枚「新建对话」只在本次会话已经产出过模型输出后才露面：
+            // 空白新会话里它没有实际去处，点了也只是把同一个空会话重置一遍。
+            showNewConversationAction = agentState.homeState.messages.any { message ->
+                message is io.github.mangi.eta.ui.model.AgentMessageUi && message.content.isNotBlank()
+            },
             onOpenTerminal = { pushRoute(AppRoute.Terminal) },
             onLaunchKimiWeb = {
                 requestExecutionNotifications()

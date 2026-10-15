@@ -127,7 +127,7 @@ private object ConversationPanelMetrics {
     val HeaderIconButtonSize = 40.dp
     val HeaderIconSize = 20.dp
 
-    /** 底部工具条：左侧「新建对话」主按钮与右侧设置圆钮共用的高度。 */
+    /** 底部工具条：设置圆钮的高度。 */
     val DockHeight = 48.dp
 }
 
@@ -172,9 +172,6 @@ internal fun ConversationPanePanel(
 ) {
     // state.conversations 已由 AgentAppState 按标题、预览与消息内容过滤。
     val query = state.searchQuery.trim()
-    // 最近打开过的会话：越靠前越新；搜索和批量模式下不显示，免得干扰结果。
-    val recentOpened = state.recentOpenedIds
-        .mapNotNull { id -> state.conversations.firstOrNull { it.id == id } }
     var batchMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var collapsedSections by rememberSaveable(
@@ -184,6 +181,8 @@ internal fun ConversationPanePanel(
     var searchActive by rememberSaveable { mutableStateOf(false) }
     val capabilities = rememberDeviceCapabilities()
     val groups = remember(state.conversations, state.categories) { state.conversations.groupForDrawer(state.categories) }
+    // 列表按分类分组（而不是时间分组）时，顶端那句「最近」不适用，直接省略。
+    val categoryGrouped = groups.any { it.section is ConversationDrawerSection.Category }
 
     Surface(
         modifier = modifier
@@ -192,7 +191,7 @@ internal fun ConversationPanePanel(
         color = conversationPaneContainerColor(),
         contentColor = MiuixTheme.colorScheme.onSurface,
     ) {
-        // 顶部标题/搜索与底部主按钮固定，中间的入口与历史列表滚动。
+        // 顶部标题/搜索与底部设置入口固定，中间的入口与历史列表滚动。
         Column(modifier = Modifier.fillMaxSize().imePadding()) {
             PaneFixedRegion {
                 Column(
@@ -279,25 +278,28 @@ internal fun ConversationPanePanel(
                         )
                     }
                 }
-                if (query.isBlank() && !batchMode && recentOpened.isNotEmpty()) {
-                    item(key = "recent-opened") {
-                        RecentOpenedSection(
-                            conversations = recentOpened,
-                            onOpen = onConversationSelected,
-                        )
-                    }
-                }
                 item(key = "history-heading") {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 10.dp, bottom = 4.dp, end = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            if (batchMode) "已选 ${selectedIds.size} 项" else stringResource(R.string.time_recent),
-                            style = MiuixTheme.textStyles.body2,
-                            fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MiuixTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f).semantics { heading() },
-                        )
+                        // 下面走分类分组时不再冠一句「最近」：分组标题本身就是分类名，
+                        // 再套一层「最近」会让人以为这些分类会话是按时间排出来的。
+                        val headingText = when {
+                            batchMode -> "已选 ${selectedIds.size} 项"
+                            categoryGrouped -> ""
+                            else -> stringResource(R.string.time_recent)
+                        }
+                        if (headingText.isNotEmpty()) {
+                            Text(
+                                headingText,
+                                style = MiuixTheme.textStyles.body2,
+                                fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MiuixTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f).semantics { heading() },
+                            )
+                        } else {
+                            Spacer(Modifier.weight(1f))
+                        }
                         if (batchMode) {
                             Text("全选", color = MiuixTheme.colorScheme.primary, fontWeight = FontWeight.Medium,
                                 modifier = Modifier.padding(horizontal = 8.dp).clickable {
@@ -377,10 +379,7 @@ internal fun ConversationPanePanel(
                         .padding(horizontal = ConversationPanelMetrics.PaneHorizontalPadding),
                 ) {
                     Spacer(Modifier.height(ConversationPanelMetrics.DockTopGap))
-                    PaneDock(
-                        onNewConversation = onNewConversation,
-                        onOpenSettings = onOpenSettings,
-                    )
+                    PaneDock(onOpenSettings = onOpenSettings)
                     Spacer(Modifier.height(ConversationPanelMetrics.BottomInset))
                 }
             }
@@ -471,46 +470,16 @@ private fun PaneShortcuts(
     }
 }
 
-/** GPT 式底部工具条：左边「新建对话」主按钮，右边设置。 */
+/** 侧栏底部工具条：只留设置入口。「新建对话」顶栏已经有一枚圆钮，底部不再重复一遍。 */
 @Composable
 private fun PaneDock(
-    onNewConversation: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.End,
     ) {
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .height(ConversationPanelMetrics.DockHeight)
-                .clip(CircleShape)
-                .background(MiuixTheme.colorScheme.primary)
-                .clickable(
-                    role = Role.Button,
-                    onClickLabel = stringResource(R.string.action_new_conversation),
-                    onClick = onNewConversation,
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.AddComment,
-                contentDescription = null,
-                tint = MiuixTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                stringResource(R.string.action_new_conversation),
-                style = MiuixTheme.textStyles.body1,
-                fontWeight = FontWeight.SemiBold,
-                color = MiuixTheme.colorScheme.onPrimary,
-                maxLines = 1,
-            )
-        }
         IconButton(
             onClick = onOpenSettings,
             modifier = Modifier.size(ConversationPanelMetrics.DockHeight).clip(CircleShape)
@@ -598,53 +567,6 @@ private fun ConversationSectionHeader(
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-/** 侧栏最上面一栏：最近打开过的对话，最多 3 条，多的折叠成 +N。 */
-@Composable
-private fun RecentOpenedSection(
-    conversations: List<ConversationSummaryUi>,
-    onOpen: (String) -> Unit,
-) {
-    val expanded = remember { mutableStateOf(false) }
-    val shown = if (expanded.value) conversations else conversations.take(3)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 10.dp, bottom = 4.dp, end = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "最近打开",
-                style = MiuixTheme.textStyles.body2,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MiuixTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
-            if (conversations.size > 3) {
-                Text(
-                    if (expanded.value) "收起" else "+${conversations.size - 3}",
-                    color = MiuixTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(horizontal = 8.dp).clickable { expanded.value = !expanded.value },
-                )
-            }
-        }
-        shown.forEach { conversation ->
-            Text(
-                text = conversation.title.ifBlank { conversation.preview }.ifBlank { "会话" },
-                color = MiuixTheme.colorScheme.onSurface,
-                fontSize = 15.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { onOpen(conversation.id) }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-        }
-    }
-}
-
 @Composable
 private fun ConversationTextRow(
     conversation: ConversationSummaryUi,

@@ -411,6 +411,8 @@ private suspend fun runSelfCheck(context: Context): SelfCheckReport {
         SelfCheckItem("内存占用胶囊", STATE_BUILTIN, "顶栏显示内存占用，点开看明细"),
         SelfCheckItem("插话按会话投递", STATE_BUILTIN, "运行中插话只投给同会话正在跑的 run，别的会话在跑长任务时不会再被吸进去"),
         SelfCheckItem("顶栏状态行右靠紧凑", STATE_BUILTIN, "顶栏状态胶囊、新建对话、更多一起贴右，行尾留白收紧"),
+        SelfCheckItem("顶栏新建按钮按需出现", STATE_BUILTIN, "本次会话还没产出过模型输出时，顶栏不摆「新建对话」；跑出内容后才露面，空白新会话下它等于把同一个空会话重置一遍"),
+        SelfCheckItem("会话侧栏精简", STATE_BUILTIN, "侧栏底部只留设置入口，新建对话只保留顶栏一枚圆钮；不再单列「最近打开」速览；列表走分类分组时不再挂「最近」标题"),
         SelfCheckItem("文本库容量上限", STATE_BUILTIN, "单字段超 1200 万字符时保留尾部（尽量落在 JSON 元素边界），读入峰值约 50 MB，512 MB 堆内安全；超大堆由 largeHeap 提供"),
         SelfCheckItem("文本库瘦身体检", STATE_BUILTIN, "自检页「文本库体量」报出分块总量、最大字段、单次读入窗口与越线数，可一键瘦身；升级后首次起动自动跑一次"),
         SelfCheckItem("瘦身写回引用头", STATE_BUILTIN, "瘦身只保留尾部、按 JSON 元素边界切齐，删旧分块后把新引用头写回原列，读取不会 length mismatch"),
