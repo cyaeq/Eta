@@ -61,13 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -108,13 +102,9 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.blur.BlendColorEntry
-import top.yukonga.miuix.kmp.blur.BlurDefaults
-import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -361,7 +351,6 @@ private fun AgentChatScaffold(
         bottomBar = {
             AgentChatBottomBar(
                 draftKey = draftKey,
-                messageBackdrop = messageBackdrop.takeIf { frostEnabled },
                 input = input,
                 modelPickerState = modelPickerState,
                 isCompacting = isCompacting,
@@ -970,7 +959,6 @@ internal fun resolveFinalResultMessageIds(
 @Composable
 private fun AgentChatBottomBar(
     draftKey: String? = null,
-    messageBackdrop: LayerBackdrop?,
     input: String,
     modelPickerState: AgentModelPickerUiState,
     isCompacting: Boolean,
@@ -1004,73 +992,15 @@ private fun AgentChatBottomBar(
             .fillMaxWidth()
             .imePadding(),
     ) {
-        if (messageBackdrop != null) {
-            val blurColors = BlurDefaults.blurColors(
-                blendColors = listOf(
-                    BlendColorEntry(MiuixTheme.colorScheme.surface.copy(alpha = ChatBottomSurfaceAlpha))
-                ),
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(ChatBottomFrostHeight)
-                    // DstIn 让真实磨砂在顶部透明、靠近输入框时逐渐变实，消除硬裁切线。
-                    .graphicsLayer {
-                        compositingStrategy = CompositingStrategy.Offscreen
-                    }
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black),
-                            ),
-                            blendMode = BlendMode.DstIn,
-                        )
-                    }
-                    .textureBlur(
-                        backdrop = messageBackdrop,
-                        shape = RectangleShape,
-                        blurRadius = 20f,
-                        colors = blurColors,
-                    ),
-            )
-        } else {
-            // 空白主页沿用原来的轻微渐隐，不改变主页视觉。
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(16.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                MiuixTheme.colorScheme.surface,
-                            ),
-                        )
-                    ),
-            )
-        }
+        // 原来这里是一条磨砂过渡条：先把自己的底色从透明渐显出来，再由下面的输入区接着铺满。
+        // 输入框周围改透明之后，这块底色失去了承接对象——继续留着只会是壁纸上一段孤立的白带，
+        // 所以只保留高度（消息与输入框之间的呼吸），不再绘制任何东西。
+        Spacer(Modifier.height(ChatBottomFadeGap))
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                // 过渡条已经磨砂时，输入区跟着一起磨砂透壁纸，输入框才有"浮在壁纸上"的观感；
-                // 没有磨砂（无消息或关掉模糊）时保持原来不透明的 surface，行为不变。
-                .then(
-                    if (messageBackdrop != null) {
-                        Modifier.textureBlur(
-                            backdrop = messageBackdrop,
-                            shape = RectangleShape,
-                            blurRadius = 20f,
-                            colors = BlurDefaults.blurColors(
-                                blendColors = listOf(
-                                    BlendColorEntry(MiuixTheme.colorScheme.surface.copy(alpha = ChatBottomSurfaceAlpha)),
-                                ),
-                            ),
-                        )
-                    } else {
-                        Modifier.background(MiuixTheme.colorScheme.surface)
-                    },
-                )
+                // 输入框周围完全透明：遮挡只交给输入框自身那圈圆角边框与半透明底，
+                // 周围直接透出下层（设了背景图就是壁纸；没设时下层本来就是 surface，观感不变）。
                 .navigationBarsPadding()
                 .padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
         ) {
@@ -1111,10 +1041,13 @@ private fun AgentChatBottomBar(
     }
 }
 
-private val ChatBottomFrostHeight = 24.dp
-
-/** 底部磨砂的容器色透明度：过渡条与输入区用同一个值，接缝处不会有色差。 */
-private const val ChatBottomSurfaceAlpha = 0.72f
+/**
+ * 输入区上方的留白高度。
+ *
+ * 这里原本有一条 24dp 的磨砂过渡条（把底色从透明渐显到磨砂/不透明），输入框周围改成透明后
+ * 它失去了承接对象，于是只留高度不留绘制内容，消息与输入框之间的间距保持改动前的手感。
+ */
+private val ChatBottomFadeGap = 24.dp
 
 private const val ChatBottomSentinelKey = "agent-chat-bottom-sentinel"
 private const val BOTTOM_FOLLOW_RESPONSE_SECONDS = 0.085f
