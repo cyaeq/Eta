@@ -544,7 +544,7 @@ private suspend fun runSelfCheck(context: Context): SelfCheckReport {
         SelfCheckItem(
             "胶囊常驻与最近会话",
             STATE_BUILTIN,
-            "悬浮胶囊可设常驻；面板可放大、会话条目可点回；保留最近 3 条；跑完的「已完成」提示不自动消失",
+            "悬浮胶囊可设常驻；面板可放大、会话条目可点回；保留最近 3 条；常驻时跑完留「已完成」提示，非常驻时点一下直达会话并在停留时间后自动收起",
         ),
         SelfCheckItem(
             "任务完成通知",

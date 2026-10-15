@@ -1066,7 +1066,7 @@ private fun VirtualScreenFloatWindowPrefs() {
 
     EtaSwitchPreference(
         title = "悬浮胶囊常驻",
-        summary = "打开 Eta 后一直显示悬浮胶囊（没任务时也在），点它看运行中会话",
+        summary = "打开 Eta 后一直显示悬浮胶囊（没任务时也在），点它看运行中会话；关闭则只在任务完成时短暂出现，点一下就直达该会话",
         checked = current.overlayCapsulePinned,
         onCheckedChange = { value ->
             if (value && !Settings.canDrawOverlays(context)) {

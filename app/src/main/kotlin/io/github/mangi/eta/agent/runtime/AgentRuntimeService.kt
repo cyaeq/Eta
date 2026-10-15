@@ -6,6 +6,7 @@ import java.util.concurrent.RejectedExecutionException
 import android.app.Service
 import android.app.ActivityOptions
 import android.app.PendingIntent
+import android.app.KeyguardManager
 import io.github.mangi.eta.ui.MainActivity
 import android.os.Build
 import android.content.Context
@@ -17,6 +18,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.Message
 import android.os.Messenger
+import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
 import android.view.Gravity
@@ -769,6 +771,9 @@ internal class AgentRuntimeService : Service(), LifecycleOwner, SavedStateRegist
         mainHandler.removeCallbacksAndMessages(hideToken)
         if (usesVirtualUi(session, runBlocking { SettingsDataStore.settings() }.virtualScreenEnabled)) {
             if (!capsulePinned) removeOverlayWindows()
+        } else if (!capsulePinned && unreadFinished) {
+            // 非常驻：上一条完成提示不跨到新任务里，任务一开始就收掉，免得它一直挂着。
+            removeOverlayWindows()
         }
         state.value = AgentOverlayState.Initial
         syncRunningSessions()
@@ -1797,12 +1802,13 @@ internal class AgentRuntimeService : Service(), LifecycleOwner, SavedStateRegist
             state.value = finishedNoticeState(finalState).copy(finishedBadge = unreadFinishedCount)
             ensureOverlayVisible()
         } else {
-            // 完成提示不自动消失：保留胶囊显示「已完成」，等用户打开 Eta 再收。
-            mainHandler.removeCallbacksAndMessages(hideToken)
+            // 非常驻：完成提示胶囊点一下直达会话，没人理就在停留时间后自己收掉，
+            // 不留一条只能靠回到 Eta 才消掉的常驻胶囊。
             capsuleExpanded.value = false
             setCapsuleWindowHeight(CAPSULE_COLLAPSED_HEIGHT_DP)
             state.value = finishedNoticeState(finalState).copy(finishedBadge = unreadFinishedCount)
             ensureOverlayVisible()
+            scheduleFinishedCapsuleDismiss()
         }
     }
 
@@ -1811,7 +1817,7 @@ internal class AgentRuntimeService : Service(), LifecycleOwner, SavedStateRegist
         val failed = finalState.phase == io.github.mangi.eta.agent.overlay.AgentOverlayPhase.FAILED
         // 完成后保留会话列表：胶囊展开后仍能点回刚跑完的会话。
         return finalState.copy(
-            thought = if (failed) "任务失败，点开查看" else "已完成，点开查看结果",
+            thought = if (failed) "任务失败，点一下回到会话" else "已完成，点一下回到会话",
         )
     }
 
@@ -1837,6 +1843,37 @@ internal class AgentRuntimeService : Service(), LifecycleOwner, SavedStateRegist
         resultCardParams = null
         removeAmbientWindows()
         windowManager = null
+    }
+
+    /**
+     * 非常驻模式下的完成提示胶囊：到点自己收掉（连同服务）。
+     *
+     * 熄屏或锁屏时不计时——用户看不见，留着没意义，亮屏解锁后再给完整的停留时间；
+     * 面板正被用户打开、或还有别的会话在跑时也不收，重新排队等下一轮。
+     */
+    private fun scheduleFinishedCapsuleDismiss() {
+        mainHandler.removeCallbacksAndMessages(hideToken)
+        if (capsulePinned) return
+        val linger = if (userCanSeeCapsule()) FINISHED_CAPSULE_LINGER_MS else FINISHED_CAPSULE_SCREEN_OFF_POLL_MS
+        mainHandler.postDelayed(
+            Runnable {
+                if (capsulePinned || !userCanSeeCapsule() || capsuleExpanded.value || runningSessionCount() > 0) {
+                    scheduleFinishedCapsuleDismiss()
+                    return@Runnable
+                }
+                dismissAndStop()
+            },
+            hideToken,
+            linger,
+        )
+    }
+
+    /** 用户此刻真的看得见、点得到胶囊：亮屏且已解锁。熄屏或锁屏时先不计时。 */
+    private fun userCanSeeCapsule(): Boolean {
+        val power = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        if (power != null && !power.isInteractive) return false
+        val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        return keyguard?.isKeyguardLocked != true
     }
 
     private fun dismissAndStop() {
@@ -1922,6 +1959,11 @@ internal class AgentRuntimeService : Service(), LifecycleOwner, SavedStateRegist
         private const val CAPSULE_EXPANDED_WIDTH_DP = 396
         /** 收起态是个真正的小胶囊，只留图标和角标。 */
         private const val CAPSULE_COLLAPSED_HEIGHT_DP = 60
+
+        /** 非常驻模式：完成提示胶囊的停留时长，够看见、够点一下，又不长期占屏。 */
+        private const val FINISHED_CAPSULE_LINGER_MS = 15_000L
+        /** 熄屏期间不真正计时（用户看不见），只按这个间隔轮询，亮屏后再给完整停留时间。 */
+        private const val FINISHED_CAPSULE_SCREEN_OFF_POLL_MS = 5_000L
 
         /** 最近打开过的对话：内部最多记 5 条，面板上最多显示 3 条（多的折叠）。 */
         /** 胶囊允许贴到屏幕边缘（0 = 不留白），展开面板的留白另有处理。 */

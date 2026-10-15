@@ -93,7 +93,8 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * 顶部状态胶囊：收起时只显示一句当前步骤，点击展开补充、暂停与停止。
+ * 顶部状态胶囊：运行中收起时显示一句当前步骤，点击展开补充、暂停与停止；
+ * 跑完后收起态点一下直达那条会话（多条未读、或任务仍在跑时才展开面板）。
  * 位置固定在状态栏下方居中，不随 Agent 的点击位置移动，避免和目标控件重叠。
  * 状态文字只在语义变化时以上滑淡入切换，流式正文不进入胶囊。
  */
@@ -156,8 +157,21 @@ internal fun AgentOverlayCapsule(
         }
     }
 
-    LaunchedEffect(expanded) {
+    // 收起态点击语义：已经没有会话在跑、且只有一条没看过的结果时，点一下直达那条会话；
+    // 多条未读（要选一条）或任务还在跑（要暂停／停止）时才展开面板。
+    val hasRunningSessions = state.runningSessions.any { it.running }
+    val directConversationId: String? = when {
+        expanded -> if (state.finishedBadge > 0) unreadSessions.firstOrNull()?.conversationId else null
+        !hasRunningSessions &&
+            (state.phase == AgentOverlayPhase.FINISHED || state.phase == AgentOverlayPhase.FAILED) &&
+            unreadSessions.size == 1 -> unreadSessions.first().conversationId
+        else -> null
+    }
+
+    LaunchedEffect(expanded, hasRunningSessions) {
         if (!expanded && supplementMode) leaveSupplementMode()
+        // 任务都结束了，补充输入框没有意义：自动退出，别继续占着面板高度。
+        if (!hasRunningSessions && supplementMode) leaveSupplementMode()
     }
 
     val accent by animateColorAsState(overlayPhaseAccent(state.phase), tween(240), label = "capsule_accent")
@@ -267,13 +281,9 @@ internal fun AgentOverlayCapsule(
                             onClick = {
                                 // 长按刚触发过：这次抬手不当作点击，免得回家后又被展开一次。
                                 if (System.currentTimeMillis() - lastLongPressAt < 700L) return@combinedClickable
-                                // 展开态且有没看过的结果：点一下直接跳回那条会话。
-                                val target = if (expanded && state.finishedBadge > 0) {
-                                    unreadSessions.firstOrNull()?.conversationId
-                                } else {
-                                    null
-                                }
+                                val target = directConversationId
                                 if (target != null) {
+                                    // 直达：点一下就走人，不再为了看结果先弹一整块面板。
                                     onCollapseRequest()
                                     onOpenConversation(target)
                                 } else {
@@ -393,6 +403,7 @@ internal fun AgentOverlayCapsule(
                                 },
                         )
                         // 运行中会话下面接「最新回复」：完成但还没看过的会话，点一条就跳回去。
+                        val unreadIds = unreadSessions.map { it.conversationId }.toSet()
                         if (unreadSessions.isNotEmpty()) {
                             OverlayRecentOpenedList(
                                 sessions = unreadSessions,
@@ -400,14 +411,16 @@ internal fun AgentOverlayCapsule(
                                 title = "最新回复",
                             )
                         }
-                        if (recentOpened.isNotEmpty()) {
+                        // 「最新回复」里已经列过的会话，不在「最近打开」里再重复一遍。
+                        val otherRecent = recentOpened.filterNot { it.conversationId in unreadIds }
+                        if (otherRecent.isNotEmpty()) {
                             OverlayRecentOpenedList(
-                                sessions = recentOpened,
+                                sessions = otherRecent,
                                 onOpenConversation = onOpenConversation,
                                 title = "最近打开",
                             )
                         }
-                        if (supplementMode) {
+                        if (supplementMode && hasRunningSessions) {
                             OverlaySupplementInput(
                                 value = supplementText,
                                 onValueChange = { supplementText = it },
@@ -422,33 +435,37 @@ internal fun AgentOverlayCapsule(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
                             ) {
-                                CapsuleAction(
-                                    icon = Icons.Rounded.Edit,
-                                    label = stringResource(R.string.overlay_supplement),
-                                    tint = MiuixTheme.colorScheme.onSurface,
-                                    onClick = { setSupplementMode(true) },
-                                )
-                                if (state.phase == AgentOverlayPhase.RUNNING) {
+                                // 没有会话在跑时不再摆「补充／暂停／停止」：任务已经结束，这些按钮点了也没用，
+                                // 面板因此矮一截，只留下面那颗「回到 Eta 主页」。
+                                if (hasRunningSessions) {
                                     CapsuleAction(
-                                        icon = Icons.Rounded.Pause,
-                                        label = stringResource(R.string.overlay_pause),
+                                        icon = Icons.Rounded.Edit,
+                                        label = stringResource(R.string.overlay_supplement),
                                         tint = MiuixTheme.colorScheme.onSurface,
-                                        onClick = onPause,
+                                        onClick = { setSupplementMode(true) },
                                     )
-                                } else if (state.phase == AgentOverlayPhase.PAUSED) {
+                                    if (state.phase == AgentOverlayPhase.RUNNING) {
+                                        CapsuleAction(
+                                            icon = Icons.Rounded.Pause,
+                                            label = stringResource(R.string.overlay_pause),
+                                            tint = MiuixTheme.colorScheme.onSurface,
+                                            onClick = onPause,
+                                        )
+                                    } else if (state.phase == AgentOverlayPhase.PAUSED) {
+                                        CapsuleAction(
+                                            icon = Icons.Rounded.PlayArrow,
+                                            label = stringResource(R.string.overlay_resume),
+                                            tint = MiuixTheme.colorScheme.primary,
+                                            onClick = onResume,
+                                        )
+                                    }
                                     CapsuleAction(
-                                        icon = Icons.Rounded.PlayArrow,
-                                        label = stringResource(R.string.overlay_resume),
-                                        tint = MiuixTheme.colorScheme.primary,
-                                        onClick = onResume,
+                                        icon = Icons.Rounded.Stop,
+                                        label = stringResource(R.string.action_stop),
+                                        tint = MiuixTheme.colorScheme.error,
+                                        onClick = onStop,
                                     )
                                 }
-                                CapsuleAction(
-                                    icon = Icons.Rounded.Stop,
-                                    label = stringResource(R.string.action_stop),
-                                    tint = MiuixTheme.colorScheme.error,
-                                    onClick = onStop,
-                                )
                                 // 常驻「回主页」按钮：和上面三个按钮同一行，任何状态下都在。
                                 CapsuleAction(
                                     icon = Icons.Rounded.Home,
