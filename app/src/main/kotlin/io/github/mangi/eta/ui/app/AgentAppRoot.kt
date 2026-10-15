@@ -300,7 +300,17 @@ fun AgentAppRoot(
             isCurrentRoute = backStack.lastOrNull() == route,
             conversationPaneState = agentState.conversationPaneState,
             isConversationPaneOpen = conversationPaneOpen,
+            // 状态行左端：四个快捷图标。是否显示由外观设置 quickActionsInStatusRow 决定，
+            // 关掉时组件不绘制任何内容。
             conversationStatus = {
+                io.github.mangi.eta.ui.components.HomeQuickActions(
+                    onOpenCategories = { pushRoute(AppRoute.ConversationCategories) },
+                    onOpenTerminal = { pushRoute(AppRoute.Terminal) },
+                    onOpenBrowser = { pushRoute(AppRoute.Browser) },
+                )
+            },
+            // 状态行右端：上下文用量、内存两枚胶囊（含压缩/裁剪提示），整块贴行尾右对齐。
+            trailingCapsules = {
                 io.github.mangi.eta.ui.components.ConversationStatusCapsules(
                     agentState.homeState.messages, agentState.modelPickerState.selectedModel,
                     agentState.homeState.lastModelUsage, agentState.historyTrimNotice,
@@ -311,14 +321,6 @@ fun AgentAppRoot(
                         ?.let {
                             it to io.github.mangi.eta.agent.model.AgentContextPolicy.MAX_COMPACTION_ROUNDS
                         },
-                    // 快捷图标排在胶囊左边；是否显示由外观设置决定，组件自己会判断。
-                    leading = {
-                        io.github.mangi.eta.ui.components.HomeQuickActions(
-                            onOpenCategories = { pushRoute(AppRoute.ConversationCategories) },
-                            onOpenTerminal = { pushRoute(AppRoute.Terminal) },
-                            onOpenBrowser = { pushRoute(AppRoute.Browser) },
-                        )
-                    },
                 )
             },
             onBack = { popRoute() },

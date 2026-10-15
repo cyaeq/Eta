@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -106,11 +107,17 @@ fun AgentAppShell(
     conversationStatus: (@Composable () -> Unit)? = null,
     /** 首页顶栏右侧的「工具档」入口；与 [conversationStatus] 同款可空槽位，由调用方注入。 */
     profileAction: (@Composable () -> Unit)? = null,
+    /** 状态行最右端的胶囊组（上下文用量、内存），摆在溢出菜单之后。 */
+    trailingCapsules: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val scrollBehavior = MiuixScrollBehavior()
-    val backdrop = rememberTopBarBackdrop()
+    // 顶栏透明只在首页生效：首页顶栏下面是全局壁纸层，透出来就是壁纸本身；
+    // 二级页下面是 NavDisplay 仍在下层绘制的 Home 页，透明会把两页的标题叠在一起。
+    val transparentTopBar = currentRoute is AppRoute.Home &&
+        LocalAppearanceSettings.current.topBarTransparent
+    val backdrop = rememberTopBarBackdrop(transparentTopBar)
     val topBarColor = topBarContainerColor(backdrop)
     // 首页顶栏标题＝当前会话标题（标题为空时退回预览文本）；没选中会话时留空。
     // 工具档从下面那行挪上来之后，导航图标与右侧操作之间的空位正好给标题用。
@@ -129,7 +136,7 @@ fun AgentAppShell(
             ),
             topBar = {
                 if (currentRoute !is AppRoute.Settings) {
-                    TopBarBackdrop(backdrop) {
+                    TopBarBackdrop(backdrop, transparent = transparentTopBar) {
                         AgentTopBar(
                             route = currentRoute,
                             homeTitle = homeTitle,
@@ -148,6 +155,7 @@ fun AgentAppShell(
                             onOpenBrowser = onOpenBrowser,
                             conversationStatus = conversationStatus,
                             profileAction = profileAction,
+                            trailingCapsules = trailingCapsules,
                         )
                     }
                 }
@@ -219,6 +227,7 @@ private fun AgentTopBar(
     onOpenBrowser: () -> Unit,
     conversationStatus: (@Composable () -> Unit)?,
     profileAction: (@Composable () -> Unit)?,
+    trailingCapsules: (@Composable () -> Unit)?,
 ) {
     val isHome = route is AppRoute.Home
     // 快捷入口默认摆在胶囊行左侧，此时「⋯」里只剩收藏应用与停止 Kimi Web；
@@ -258,15 +267,19 @@ private fun AgentTopBar(
             }
         }
     }
-    // 状态行：快捷图标与两枚胶囊左对齐，溢出菜单右对齐。
-    // 溢出菜单从顶栏挪下来，顶栏右侧只剩工具档与新建对话，窄屏上不再挤。
+    // 状态行：左端放快捷图标（由 conversationStatus 注入），右端放两枚状态胶囊
+    // （trailingCapsules）。中间的 weight Box 吃掉余量，把右侧这一簇顶到行尾，
+    // 胶囊因此右对齐到行尾 8dp；溢出菜单排在胶囊左侧，不抢行尾位置。
     val statusRow: @Composable () -> Unit = {
         if (isHome) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 8.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(modifier = Modifier.weight(1f)) { conversationStatus?.invoke() }
+                trailingCapsules?.invoke()
                 if (showOverflowMenu) {
                     TopBarOverflowMenu(
                         entries = overflowEntries,

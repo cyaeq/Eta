@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -40,6 +39,7 @@ internal fun ConversationStatusCapsules(
     compaction: Pair<Int, Int>? = null,
     /** 行首槽位，用来放快捷图标；不传就是空。 */
     leading: (@Composable RowScope.() -> Unit)? = null,
+    modifier: Modifier = Modifier,
 ) {
     // 顶栏这一枚只报占用比例：363dp 宽的屏上，带上绝对值（146.3K/1M）会和快捷图标一起把整行撑满，
     // 百分比已经足够表达"还剩多少上下文"。绝对值仍保留在无障碍描述里，读屏不丢信息。
@@ -65,12 +65,10 @@ internal fun ConversationStatusCapsules(
     val speedText = speed?.let {
         NumberFormat.getNumberInstance().apply { maximumFractionDigits = 1 }.format(it)
     } ?: "—"
-    // 独占一行（顶栏 bottomContent），快捷图标与两枚胶囊左对齐；
-    // 行尾余量留给外层的溢出菜单——它与本组件同处一个 Row，靠 weight 把菜单顶到最右。
+    // 独占一行（顶栏 bottomContent）。本组件整块挂在状态行的**右端**，只按内容宽度排布：
+    // 行首的 Box(weight) 负责把这一簇顶到右边。内边距与下边距统一由外层给，避免两处叠加。
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 8.dp, bottom = 6.dp),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (leading != null) {
