@@ -1099,6 +1099,30 @@ private fun VirtualScreenFloatWindowPrefs() {
     EtaPreferenceDivider()
 
     EtaSwitchPreference(
+        title = "无障碍浮窗通道",
+        summary = "开着：浮窗借 Eta 的无障碍服务显示，不需要悬浮窗权限（关掉「显示在其他应用上层」也照样弹）；关掉：浮窗只走悬浮窗权限，没授权就不显示",
+        checked = current.overlayAccessibilityOverlayEnabled,
+        onCheckedChange = { value ->
+            // 先在进程内同步开关，再落盘并让 Runtime 按新通道重建浮窗。
+            io.github.mangi.eta.agent.overlay.AgentOverlayChannel.onSettingChanged(value)
+            scope.launch {
+                SettingsDataStore.updateSettings { it.copy(overlayAccessibilityOverlayEnabled = value) }
+                runCatching {
+                    context.startService(
+                        Intent(context, io.github.mangi.eta.agent.runtime.AgentRuntimeService::class.java)
+                            .setAction(
+                                io.github.mangi.eta.agent.runtime.AgentRuntimeService.ACTION_REFRESH_OVERLAY_CHANNEL,
+                            ),
+                    )
+                }
+            }
+        },
+        startAction = { EtaPreferenceIcon(Icons.Rounded.AccessibilityNew, tint = EtaPreferenceColors.Blue) },
+    )
+
+    EtaPreferenceDivider()
+
+    EtaSwitchPreference(
         title = "虚拟屏幕悬浮小窗",
         summary = "虚拟屏启动时自动弹出可拖拽小窗，拖到屏幕边缘自动折叠",
         checked = current.virtualScreenFloatWindowEnabled,
@@ -1249,7 +1273,7 @@ private val SETTINGS_SEARCH_INDEX = listOf(
     SettingsSearchEntry("section_agent", "llm 提供商 模型 服务商 api 密钥 深度思考"),
     SettingsSearchEntry("section_context_extensions", "上下文 扩展 自动压缩 记忆"),
     SettingsSearchEntry("section_tools", "工具 工具档 精简 五档 mcp"),
-    SettingsSearchEntry("system_enhancements", "能力增强 语音 朗读 语速 音调 tts 虚拟屏 小窗 悬浮窗 折叠 胶囊 常驻"),
+    SettingsSearchEntry("system_enhancements", "能力增强 语音 朗读 语速 音调 tts 虚拟屏 小窗 悬浮窗 浮窗 折叠 胶囊 常驻 无障碍 通道 叠加"),
     SettingsSearchEntry("section_assistant_takeover", "系统助手接管 接管 助手"),
     SettingsSearchEntry("section_oem_assistant_compatibility", "厂商助手兼容 小布 小爱 vivo 蓝心 兼容"),
     SettingsSearchEntry("section_general", "通用 外观 主题 语言"),

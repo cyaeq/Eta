@@ -75,8 +75,14 @@ class EtaApp : Application(), XposedServiceHelper.OnServiceListener {
         McpServerRepository.init(this)
         // 悬浮胶囊常驻：上次开着就继续挂上，没有任务时显示空闲。
         applicationScope.launch(Dispatchers.IO) {
-            val pinned = runCatching { SettingsDataStore.settings().overlayCapsulePinned }.getOrDefault(false)
-            if (pinned) {
+            val overlaySettings = runCatching { SettingsDataStore.settings() }.getOrNull()
+            // 浮窗通道开关：进程一起来就读进缓存，免得启动早期建的浮层用错窗口类型。
+            overlaySettings?.let {
+                io.github.mangi.eta.agent.overlay.AgentOverlayChannel.onSettingChanged(
+                    it.overlayAccessibilityOverlayEnabled,
+                )
+            }
+            if (overlaySettings?.overlayCapsulePinned == true) {
                 runCatching {
                     startService(
                         android.content.Intent(

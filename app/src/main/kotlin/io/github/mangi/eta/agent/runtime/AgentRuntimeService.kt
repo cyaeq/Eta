@@ -20,7 +20,6 @@ import android.os.Message
 import android.os.Messenger
 import android.os.PowerManager
 import android.os.Process
-import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
 import android.view.View
@@ -39,14 +38,13 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.github.mangi.eta.EtaApp
-import io.github.mangi.eta.agent.accessibility.AgentAccessibilityService
 import io.github.mangi.eta.agent.device.RootAccess
+import io.github.mangi.eta.agent.overlay.AgentOverlayChannel
 import io.github.mangi.eta.agent.display.VirtualScreenRoutingPolicy
 import io.github.mangi.eta.agent.display.VirtualScreenSession
 import io.github.mangi.eta.agent.display.VirtualScreenNotification
 import io.github.mangi.eta.agent.media.AgentImageCodec
 import io.github.mangi.eta.agent.model.AgentModelClient
-import io.github.mangi.eta.agent.overlay.AgentHapticFeedback
 import io.github.mangi.eta.agent.overlay.AgentOverlayGlow
 import io.github.mangi.eta.agent.overlay.ScreenCornerRadii
 import io.github.mangi.eta.agent.overlay.AgentOverlayCapsule
@@ -347,6 +345,19 @@ internal class AgentRuntimeService : Service(), LifecycleOwner, SavedStateRegist
             ACTION_UNPIN_CAPSULE -> {
                 capsulePinned = false
                 if (runningSessionCount() == 0) dismissAndStop()
+            }
+            ACTION_REFRESH_OVERLAY_CHANNEL -> {
+                // 「无障碍浮窗通道」开关变了：屏幕上的窗口还是按旧通道建的，撤掉之后按新通道重建
+                // （关掉通道又没悬浮窗权限时，这一步之后就不会再显示浮窗）。
+                AgentOverlayChannel.onSettingChanged(
+                    runBlocking { SettingsDataStore.settings() }.overlayAccessibilityOverlayEnabled,
+                )
+                removeOverlayWindows()
+                if (capsulePinned || unreadFinished || runningSessionCount() > 0) {
+                    ensureOverlayVisible()
+                } else {
+                    stopSelf(startId)
+                }
             }
             ACTION_MARK_READ -> {
                 // 从胶囊点进某个会话：只清这一条的未读，不用等回到 Eta 才整体归零。
@@ -1303,8 +1314,15 @@ internal class AgentRuntimeService : Service(), LifecycleOwner, SavedStateRegist
 
     private fun showOverlay() {
         if (capsuleView != null) return
-        // TYPE_ACCESSIBILITY_OVERLAY 免 SYSTEM_ALERT_WINDOW 权限；仅回退态（无障碍未启用）才需检查
-        if (AgentAccessibilityService.current() == null && !Settings.canDrawOverlays(this)) return
+        val savedOverlay = runBlocking { SettingsDataStore.settings() }
+        AgentOverlayChannel.onSettingChanged(savedOverlay.overlayAccessibilityOverlayEnabled)
+        // 无障碍叠加窗口免 SYSTEM_ALERT_WINDOW；关掉无障碍通道后必须真有悬浮窗权限才显示浮窗。
+        if (!AgentOverlayChannel.canShowOverlay(this)) {
+            AndroidAgentLogger.warnThrottled("runtime_overlay_channel_blocked") {
+                "Agent runtime overlay skipped: accessibility channel off and no SYSTEM_ALERT_WINDOW"
+            }
+            return
+        }
         val wm = overlayContext().getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         windowManager = wm
 
@@ -1339,7 +1357,6 @@ internal class AgentRuntimeService : Service(), LifecycleOwner, SavedStateRegist
                 fullScreen = capsuleFullScreen.value,
             )
         }
-        val savedOverlay = runBlocking { SettingsDataStore.settings() }
         savedCapsuleX = savedOverlay.overlayCapsulePosX
         savedCapsuleY = savedOverlay.overlayCapsulePosY
         val capsuleLp = capsuleLayoutParams()
@@ -1689,16 +1706,9 @@ internal class AgentRuntimeService : Service(), LifecycleOwner, SavedStateRegist
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
         }
 
-    private fun overlayType(): Int =
-        // 无障碍服务可用时用 TYPE_ACCESSIBILITY_OVERLAY（免 SYSTEM_ALERT_WINDOW 权限，且截图
-        // filterValidWindows 可过滤）；需用无障碍服务 context 创建，否则 BadTokenException
-        if (AgentAccessibilityService.current() != null)
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-        else
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+    private fun overlayType(): Int = AgentOverlayChannel.windowType()
 
-    private fun overlayContext(): Context =
-        AgentAccessibilityService.current() ?: this
+    private fun overlayContext(): Context = AgentOverlayChannel.windowContext(this)
 
     @Suppress("DEPRECATION")
     private fun glowLayoutParams(): WindowManager.LayoutParams {
@@ -1944,6 +1954,8 @@ internal class AgentRuntimeService : Service(), LifecycleOwner, SavedStateRegist
 
         const val ACTION_PIN_CAPSULE = "io.github.mangi.eta.agent.runtime.PIN_CAPSULE"
         const val ACTION_UNPIN_CAPSULE = "io.github.mangi.eta.agent.runtime.UNPIN_CAPSULE"
+        /** 浮窗通道开关变化：按新通道重建浮窗，让「无障碍浮窗通道」立即生效。 */
+        const val ACTION_REFRESH_OVERLAY_CHANNEL = "io.github.mangi.eta.agent.runtime.REFRESH_OVERLAY_CHANNEL"
         const val ACTION_CLEAR_READ = "io.github.mangi.eta.agent.runtime.CLEAR_READ"
         /** 单条会话已读：进过哪个会话就减哪个，立刻生效。 */
         const val ACTION_MARK_READ = "io.github.mangi.eta.agent.runtime.MARK_READ"

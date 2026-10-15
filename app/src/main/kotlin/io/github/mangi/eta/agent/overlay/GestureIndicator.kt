@@ -17,7 +17,6 @@ import android.widget.FrameLayout
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
-import io.github.mangi.eta.agent.accessibility.AgentAccessibilityService
 import kotlin.math.min
 
 object GestureIndicator {
@@ -42,13 +41,10 @@ object GestureIndicator {
         holdDurationMs: Long,
     ) {
         mainHandler.post {
-            val service = AgentAccessibilityService.current()
-            val overlayContext = service ?: context
-            val overlayType = if (service != null) {
-                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-            } else {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            }
+            // 浮窗通道由设置决定：关掉无障碍通道又没悬浮窗权限时，这里直接不画。
+            if (!AgentOverlayChannel.canShowOverlay(context)) return@post
+            val overlayContext = AgentOverlayChannel.windowContext(context)
+            val overlayType = AgentOverlayChannel.windowType()
 
             val wm = overlayContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return@post
             val indicatorView = PressIndicatorView(overlayContext, kind, holdDurationMs)
@@ -77,13 +73,10 @@ object GestureIndicator {
 
     fun showSwipe(context: Context, x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Int) {
         mainHandler.post {
-            val service = AgentAccessibilityService.current()
-            val overlayContext = service ?: context
-            val overlayType = if (service != null) {
-                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-            } else {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            }
+            // 浮窗通道由设置决定：关掉无障碍通道又没悬浮窗权限时，这里直接不画。
+            if (!AgentOverlayChannel.canShowOverlay(context)) return@post
+            val overlayContext = AgentOverlayChannel.windowContext(context)
+            val overlayType = AgentOverlayChannel.windowType()
 
             val wm = overlayContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return@post
             val indicatorView = SwipeIndicatorView(overlayContext, x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), durationMs)

@@ -60,6 +60,12 @@ data class Settings(
     val overlayCapsulePosX: Int = -1,
     val overlayCapsulePosY: Int = -1,
 
+    /**
+     * 允许浮窗借 Eta 的无障碍服务显示（TYPE_ACCESSIBILITY_OVERLAY）：不需要「显示在其他应用上层」
+     * 权限，只要无障碍服务在跑就一定能弹出来。关掉后浮窗只走普通悬浮窗权限，没授权就不显示。
+     */
+    val overlayAccessibilityOverlayEnabled: Boolean = true,
+
     /** 最近打开过的会话 id（逗号分隔，最新在前）：重启后侧栏那一栏还在。 */
     val recentOpenedConversationIds: String = "",
     val appearance: AppearanceSettings = AppearanceSettings(),
