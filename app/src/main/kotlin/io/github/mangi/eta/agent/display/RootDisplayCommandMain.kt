@@ -421,13 +421,7 @@ internal object RootDisplayCommandMain {
                                 "isResizeableMode",
                                 Int::class.javaPrimitiveType
                             ).invoke(null, resizeMode) as Boolean
-                            // 分级处理：unresizable 不再硬阻断（很多目标 App 实机能在虚拟屏里跑，
-                            // 系统真不支持时下面的 am start / DISPLAY_LAUNCH_MISMATCH 仍会拦下），
-                            // 只写一条警告日志方便排查显示异常。
-                            require(info.enabled && info.exported && info.launchMode <= ActivityInfo.LAUNCH_SINGLE_TASK) { "DISPLAY_APP_UNSUPPORTED" }
-                            if (!resizable) {
-                                hlog("launch unresizable " + component + " resizeMode=" + resizeMode + "（可能显示异常）")
-                            }
+                            require(info.enabled && info.exported && resizable && info.launchMode <= ActivityInfo.LAUNCH_SINGLE_TASK) { "DISPLAY_APP_UNSUPPORTED" }
                             // Allow re-entry to our own display, but never migrate a user's task.
                             val runningElsewhere = runningTasks().any {
                                 (it.baseActivity?.packageName == packageName || it.topActivity?.packageName == packageName) && taskDisplayId(it) != id
