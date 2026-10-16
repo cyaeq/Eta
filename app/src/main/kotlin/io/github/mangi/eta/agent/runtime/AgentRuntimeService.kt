@@ -45,6 +45,7 @@ import io.github.mangi.eta.agent.display.VirtualScreenSession
 import io.github.mangi.eta.agent.display.VirtualScreenNotification
 import io.github.mangi.eta.agent.media.AgentImageCodec
 import io.github.mangi.eta.agent.model.AgentModelClient
+import io.github.mangi.eta.agent.overlay.AgentHapticFeedback
 import io.github.mangi.eta.agent.overlay.AgentOverlayGlow
 import io.github.mangi.eta.agent.overlay.ScreenCornerRadii
 import io.github.mangi.eta.agent.overlay.AgentOverlayCapsule
