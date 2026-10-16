@@ -239,18 +239,75 @@ internal object RootDisplayCommandMain {
                 .onFailure { runCatching { startSystemHome(id) } }
             val localIme = configureLocalIme(id)
             val textInput = VirtualScreenRootTextInput(id)
-            // 已移除「按顶层应用方向 reshape 虚拟屏」的运行时改尺寸逻辑。
-            //
-            // 原实现会在顶层应用请求横屏时对已存在的虚拟屏调用 display.resize 交换宽高，
-            // 并伴随摘挂 surface、重建 ImageReader。实测它有连锁副作用：
-            //   1. resize 后 DisplayInfo 里 largest/smallest app 与 rng 边界不跟随刷新，
-            //      残留成 1272x1272-2800x2800 这类与屏幕尺寸矛盾的取值；
-            //   2. 后续不可 resize 的横屏应用，如 Unity 类，会进入 size-compat/letterbox，
-            //      按残留边界算出错误的信箱区域，Task 悬空不显示；
-            //   3. 每次请求前都会触发一次，人工只点一次可能侥幸成立，
-            //      被 Agent 高频驱动时会反复重分配缓冲区，把虚拟屏打进 state OFF
-            //      并让会话租约不释放，表现为 DISPLAY_BUSY 且之后再也开不起来。
-            // 现在虚拟屏创建后尺寸固定不变，横屏应用交由系统按书信箱化显示。
+            // 横屏场景：虚拟屏自身不能旋转，按顶层应用请求的方向把 display 换成横屏尺寸（画面不旋转、
+            // 坐标系仍是 0°），否则系统会把横屏应用信箱化成长条，小窗里看起来"横不过来"。
+            var shapeProbeAt = 0L
+            fun applyShape(landscape: Boolean) {
+                if (landscape == (width > height)) return
+                val nextWidth = height
+                val nextHeight = width
+                // 整个切换动作排到帧线程上串行执行：与正在进行的帧拷贝互斥。
+                // 否则换 surface 的瞬间旧帧缓冲被释放，正在拷贝的那一帧会踩到已解除的映射，
+                // native memmove 越界 → root helper 进程直接被杀（表现为切几次杀一次）。
+                handler.post {
+                    try {
+                        val previous = reader
+                        runCatching { previous?.setOnImageAvailableListener(null, null) }
+                        // A′ 直通：宿主面不变。改虚拟屏尺寸会让直通面重新分配缓冲，实测会崩 native，
+                        // 因此直通下建屏尺寸保持不变（横屏应用按信箱化显示）。
+                        if (hostSurface != null) {
+                            // 直通下也要能横过来：先把直通面摘下来，改完尺寸再挂回去，
+                            // 不让合成器在挂着宿主面的情况下重分配缓冲（以前正是在这一步崩 native）。
+                            val host = hostSurface
+                            val applied = runCatching {
+                                display?.setSurface(null)
+                                display?.resize(nextWidth, nextHeight, dpi)
+                                display?.setSurface(host)
+                            }
+                            if (applied.isFailure) {
+                                runCatching { display?.setSurface(host) }
+                                hlog("shape direct fail landscape=" + landscape)
+                                return@post
+                            }
+                            width = nextWidth
+                            height = nextHeight
+                            renderWidth = nextWidth
+                            renderHeight = nextHeight
+                            frameStore.reset()
+                            hlog("shape direct ok landscape=" + landscape + " size=" + nextWidth + "x" + nextHeight)
+                            return@post
+                        }
+                        val next = ImageReader.newInstance(nextWidth, nextHeight, PixelFormat.RGBA_8888, 3)
+                        val applied = runCatching {
+                            display?.setSurface(next.surface)
+                            display?.resize(nextWidth, nextHeight, dpi)
+                        }
+                        if (applied.isFailure) {
+                            next.close()
+                            runCatching { previous?.setOnImageAvailableListener(frameListener, handler) }
+                            return@post
+                        }
+                        reader = next
+                        readerRef.set(next)
+                        width = nextWidth
+                        height = nextHeight
+                        renderWidth = nextWidth
+                        renderHeight = nextHeight
+                        frameStore.reset()
+                        next.setOnImageAvailableListener(frameListener, handler)
+                        runCatching { previous?.close() }
+                    } catch (_: Throwable) {
+                        // 切换失败就保持原状，下一轮 syncShape 会再试。
+                    }
+                }
+            }
+            fun syncShape(force: Boolean = false) {
+                val now = SystemClock.elapsedRealtime()
+                if (!force && now - shapeProbeAt < 5000) return
+                shapeProbeAt = now
+                val landscape = requestedLandscape(id) ?: return
+                runCatching { applyShape(landscape) }
+            }
             if (allowOff) wakeLock =
                 power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Eta:virtual-task")
                     .apply { acquire() }
@@ -276,6 +333,7 @@ internal object RootDisplayCommandMain {
                 try {
                     require(displayManager.getDisplay(id) != null) { "DISPLAY_GONE" }
                     require(allowOff || (power.isInteractive && !keyguard.isDeviceLocked)) { "SCREEN_OFF_PERMISSION_REQUIRED" }
+                    runCatching { syncShape() }
                     val result = when (request.getString("action")) {
                         "host_surface" -> {
                             // 查看页/小窗换了宿主面：重新取一次并直接换面，失败保持原面不动。
