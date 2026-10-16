@@ -23,9 +23,12 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -95,6 +98,11 @@ fun ConversationSidePaneScaffold(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
+    // 分类胶囊的选中项属于「本次侧栏会话」的临时视图状态：不写进 AgentAppState，
+    // 也不因搜索词变化而重置，切走再回来保持上次看的那一类。
+    var categoryFilter by rememberSaveable(stateSaver = CategoryFilterSaver) {
+        mutableStateOf<CategoryFilter>(CategoryFilter.All)
+    }
     val sceneLifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
     val navigationEventState = rememberNavigationEventState(NavigationEventInfo.None)
 
@@ -252,6 +260,8 @@ fun ConversationSidePaneScaffold(
                         onOpenPermissions = onOpenPermissions,
                         onOpenTasks = onOpenTasks,
                         onOpenCategories = onOpenCategories,
+                        selectedCategoryId = categoryFilter,
+                        onSelectCategory = { filter -> categoryFilter = filter },
                         modifier = Modifier
                             .focusProperties { onEnter = { if (!isRevealed) cancelFocusChange() } }
                             .focusGroup()

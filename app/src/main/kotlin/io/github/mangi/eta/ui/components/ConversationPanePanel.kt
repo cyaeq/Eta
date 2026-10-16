@@ -168,9 +168,20 @@ internal fun ConversationPanePanel(
     onOpenPermissions: () -> Unit,
     onOpenTasks: () -> Unit,
     onOpenCategories: () -> Unit,
+    /** 侧栏分类胶囊当前选中的分类；[CategoryFilter.All] 表示不筛选。 */
+    selectedCategoryId: CategoryFilter = CategoryFilter.All,
+    onSelectCategory: (CategoryFilter) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // state.conversations 已由 AgentAppState 按标题、预览与消息内容过滤。
+    // 分类胶囊再叠一层：只看选中分类下的会话，不改变 AgentAppState 的搜索状态。
+    val visibleConversations = remember(state.conversations, selectedCategoryId) {
+        when (selectedCategoryId) {
+            CategoryFilter.All -> state.conversations
+            CategoryFilter.Uncategorized -> state.conversations.filter { it.categoryId == null }
+            is CategoryFilter.Category -> state.conversations.filter { it.categoryId == selectedCategoryId.id }
+        }
+    }
     val query = state.searchQuery.trim()
     var batchMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
@@ -180,7 +191,7 @@ internal fun ConversationPanePanel(
     // GPT 式顶栏：搜索平时收成一个图标，点开才铺出输入框；收起时把筛选条件一起清掉。
     var searchActive by rememberSaveable { mutableStateOf(false) }
     val capabilities = rememberDeviceCapabilities()
-    val groups = remember(state.conversations, state.categories) { state.conversations.groupForDrawer(state.categories) }
+    val groups = remember(visibleConversations, state.categories) { visibleConversations.groupForDrawer(state.categories) }
     // 列表按分类分组（而不是时间分组）时，顶端那句「最近」不适用，直接省略。
     val categoryGrouped = groups.any { it.section is ConversationDrawerSection.Category }
 
@@ -209,8 +220,18 @@ internal fun ConversationPanePanel(
                             fontWeight = FontWeight.Bold,
                             color = MiuixTheme.colorScheme.onSurface,
                             maxLines = 1,
-                            modifier = Modifier.weight(1f).padding(start = 4.dp),
+                            modifier = Modifier.padding(start = 4.dp),
                         )
+                        // Root 状态胶囊紧贴「Eta」二字右侧：不再单独占一行，与标题同一基线。
+                        PaneModeBadges(
+                            rootGranted = capabilities.root.isGranted,
+                            accessibilityAvailable = capabilities.accessibilityAvailable,
+                            onOpenRootSettings = onOpenRootSettings,
+                            onOpenAccessibilitySettings = onOpenAccessibilitySettings,
+                            onOpenSettings = onOpenSettings,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                        Spacer(Modifier.weight(1f))
                         PaneHeaderIconButton(
                             icon = Icons.Rounded.Search,
                             label = stringResource(R.string.conversation_search_hint),
@@ -232,12 +253,11 @@ internal fun ConversationPanePanel(
                             modifier = Modifier.padding(top = 2.dp),
                         )
                     }
-                    PaneModeBadges(
-                        rootGranted = capabilities.root.isGranted,
-                        accessibilityAvailable = capabilities.accessibilityAvailable,
-                        onOpenRootSettings = onOpenRootSettings,
-                        onOpenAccessibilitySettings = onOpenAccessibilitySettings,
-                        onOpenSettings = onOpenSettings,
+                    // 原来 Root 胶囊单独占的一行空出来，正好给会话分类胶囊用（见下方 PaneCategoryCapsule）。
+                    PaneCategoryCapsules(
+                        categories = state.categories,
+                        selectedCategoryId = selectedCategoryId,
+                        onSelectCategory = onSelectCategory,
                         modifier = Modifier.padding(top = 6.dp),
                     )
                     Spacer(Modifier.height(ConversationPanelMetrics.AfterActionBar))
@@ -298,7 +318,7 @@ internal fun ConversationPanePanel(
                         if (batchMode) {
                             Text("全选", color = MiuixTheme.colorScheme.primary, fontWeight = FontWeight.Medium,
                                 modifier = Modifier.padding(horizontal = 8.dp).clickable {
-                                    selectedIds = state.conversations.filterNot { it.isPinned || state.categories.any { c -> c.first == it.categoryId } }.map { it.id }.toSet()
+                                    selectedIds = visibleConversations.filterNot { it.isPinned || state.categories.any { c -> c.first == it.categoryId } }.map { it.id }.toSet()
                                 })
                             Text("取消", color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontWeight = FontWeight.Medium,
                                 modifier = Modifier.padding(horizontal = 8.dp).clickable {
@@ -307,7 +327,7 @@ internal fun ConversationPanePanel(
                             Text("删除", color = if (selectedIds.isEmpty()) MiuixTheme.colorScheme.onSurfaceVariantSummary else MiuixTheme.colorScheme.error,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(horizontal = 8.dp).clickable(enabled = selectedIds.isNotEmpty()) {
-                                    onBatchDelete(state.conversations.filter { it.id in selectedIds && !it.isPinned })
+                                    onBatchDelete(visibleConversations.filter { it.id in selectedIds && !it.isPinned })
                                     batchMode = false; selectedIds = emptySet()
                                 })
                         } else {
@@ -316,7 +336,7 @@ internal fun ConversationPanePanel(
                         }
                     }
                 }
-                if (state.conversations.isEmpty()) {
+                if (visibleConversations.isEmpty()) {
                     item {
                         EmptyConversations(isSearching = query.isNotBlank())
                     }
@@ -546,6 +566,70 @@ private fun PaneModeBadge(label: String, onClick: () -> Unit, active: Boolean = 
         modifier = Modifier.clip(CircleShape).background(color.copy(alpha = 0.12f))
             .semantics { contentDescription = description }
             .clickable(role = Role.Button, onClickLabel = stringResource(R.string.sidebar_settings), onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 3.dp),
+        color = color,
+        style = MiuixTheme.textStyles.footnote1,
+        fontSize = 11.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/**
+ * 会话分类胶囊行：与 Root 状态胶囊同款外观，摆在原 Root 胶囊所在的位置。
+ *
+ * 点某一枚胶囊＝把会话列表按该分类过滤，只看这个分类下的会话（再点一次回到全部）。
+ * 「未分类」是列表里固定出现的一枚，对应 `categoryId == null` 的会话，不随分类增删变化。
+ */
+@Composable
+private fun PaneCategoryCapsules(
+    categories: List<Pair<String, String>>,
+    selectedCategoryId: CategoryFilter,
+    onSelectCategory: (CategoryFilter) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // 一个分类都没有时不画这一行：只剩一枚「未分类」既没有筛选意义，也白占空间。
+    if (categories.isEmpty()) return
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        categories.forEach { (id, name) ->
+            PaneCategoryCapsule(
+                label = name,
+                active = selectedCategoryId == CategoryFilter.Category(id),
+                onClick = {
+                    onSelectCategory(
+                        if (selectedCategoryId == CategoryFilter.Category(id)) CategoryFilter.All
+                        else CategoryFilter.Category(id),
+                    )
+                },
+            )
+        }
+        // 「未分类」始终摆在最后一枚，保持稳定位置；上面没有任何分类时它就是唯一一枚。
+        PaneCategoryCapsule(
+            label = stringResource(R.string.conversation_category_uncategorized),
+            active = selectedCategoryId == CategoryFilter.Uncategorized,
+            onClick = {
+                onSelectCategory(
+                    if (selectedCategoryId == CategoryFilter.Uncategorized) CategoryFilter.All
+                    else CategoryFilter.Uncategorized,
+                )
+            },
+        )
+    }
+}
+
+/** 单枚分类胶囊：外观、内边距与 [PaneModeBadge] 完全一致。 */
+@Composable
+private fun PaneCategoryCapsule(label: String, active: Boolean, onClick: () -> Unit) {
+    val color = MiuixTheme.colorScheme.primary
+    Text(
+        text = label,
+        modifier = Modifier.clip(CircleShape)
+            .background(color.copy(alpha = if (active) 0.24f else 0.12f))
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 6.dp, vertical = 3.dp),
         color = color,
         style = MiuixTheme.textStyles.footnote1,
